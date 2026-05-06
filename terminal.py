@@ -137,7 +137,7 @@ if hasattr(signal, 'SIGTTOU'):
 if hasattr(signal, 'SIGTTIN'):
     signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit, QScrollArea, QSizePolicy
 from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon, QTextDocument, QAction
 import urllib.request
@@ -838,6 +838,7 @@ class SettingsTab(QWidget):
 class _UpdateCheckerWorker(QThread):
     """Background thread: checks for terminal + package updates without blocking startup."""
     result_ready = pyqtSignal(str)
+    error_msg    = pyqtSignal(str)
 
     def __init__(self, local_version, manual=False, parent=None):
         super().__init__(parent)
@@ -855,10 +856,18 @@ class _UpdateCheckerWorker(QThread):
         try:
             import vpm
             project_id, api_key = vpm.get_remote_credentials()
-        except Exception:
+        except Exception as e:
+            if self.manual:
+                self.error_msg.emit(
+                    f"\r\n\x1b[31;1m✗ Update check failed:\x1b[0m "
+                    f"\x1b[90mCould not load credentials: {e}\x1b[0m\r\n")
             return
 
         if not project_id or not api_key:
+            if self.manual:
+                self.error_msg.emit(
+                    "\r\n\x1b[31;1m✗ Update check failed:\x1b[0m "
+                    "\x1b[90mNo cloud credentials configured.\x1b[0m\r\n")
             return
 
         ctx = ssl._create_unverified_context()
@@ -889,8 +898,9 @@ class _UpdateCheckerWorker(QThread):
                         info_msg += "\x1b[33;1m╚══════════════════════════════════════════════════╝\x1b[0m\r\n"
                         info_msg += f"  \x1b[90mRun: \x1b[32;1mvpm upgrade\x1b[0m\x1b[90m  or bootstrap:\x1b[0m\r\n"
                         info_msg += f"  \x1b[32m{bootstrap_cmd}\x1b[0m\r\n\r\n"
-        except Exception:
-            pass
+        except Exception as _e:
+            if self.manual:
+                info_msg += f"\x1b[90m  Terminal check failed: {_e}\x1b[0m\r\n"
 
         # --- Package updates check: scan ALL locally installed files first ---
         try:
@@ -944,8 +954,9 @@ class _UpdateCheckerWorker(QThread):
                         info_msg += (f"  \x1b[32m◆ {pkg:<14}\x1b[0m "
                                      f"\x1b[90mv{lv} → \x1b[32mv{cv}\x1b[0m\r\n")
                     info_msg += "  \x1b[90mRun \x1b[32;1mvpm update-all\x1b[0m\x1b[90m to update all\x1b[0m\r\n\r\n"
-        except Exception:
-            pass
+        except Exception as e:
+            if self.manual:
+                info_msg += f"\x1b[90m  Package check failed: {e}\x1b[0m\r\n"
 
         if updates_found:
             self.result_ready.emit(info_msg)
@@ -1072,14 +1083,27 @@ class TerminalSession(QWidget):
 
     def _start_async_update_check(self, manual=False):
         """Run the update check in a background thread so startup is instant."""
-        self._update_worker = _UpdateCheckerWorker(__version__, manual=manual)
-        self._update_worker.result_ready.connect(self._on_update_result)
-        self._update_worker.finished.connect(self._update_worker.deleteLater)
-        self._update_worker.start()
+        # Keep a strong reference so the worker isn't GC'd before result_ready fires
+        worker = _UpdateCheckerWorker(__version__, manual=manual)
+        self._update_worker = worker  # strong ref
+        worker.result_ready.connect(self._on_update_result)
+        worker.error_msg.connect(self.insert_ansi_text)
+        # Only deleteLater AFTER result_ready has been processed (use queued connection order)
+        worker.result_ready.connect(lambda _: QTimer.singleShot(200, worker.deleteLater))
+        worker.error_msg.connect(lambda _: QTimer.singleShot(200, worker.deleteLater))
+        worker.finished.connect(lambda: None)  # keep alive until signals delivered
+        worker.start()
 
     def _on_update_result(self, msg):
-        """Deliver update message after a short delay so shell prompt prints first."""
-        QTimer.singleShot(1200, lambda: self.insert_ansi_text(msg))
+        """Deliver update message. Delay at startup so shell prompt prints first."""
+        worker = self.sender()
+        is_manual = getattr(worker, 'manual', False) if worker else False
+        if is_manual:
+            # Manual vpm check — show immediately, no delay
+            self.insert_ansi_text(msg)
+        else:
+            # Auto startup check — wait for shell prompt to appear first
+            QTimer.singleShot(1800, lambda: self.insert_ansi_text(msg) if self else None)
 
     def is_newer_version(self, cloud_ver, local_ver):
         """Check if cloud version is newer than local version"""
@@ -2320,54 +2344,358 @@ class VeloraPackageManagerDialog(QDialog):
         self._load_cache()
 
 
+# ─────────────────────────────────────────────────────────────────
+#  Custom Tab Bar Widgets for Platform-Specific Title Bar
+# ─────────────────────────────────────────────────────────────────
+
+class _TabPill(QPushButton):
+    """A single pill-shaped tab button."""
+    close_requested = pyqtSignal()
+
+    def __init__(self, label, parent=None):
+        super().__init__(parent)
+        self.setText(label)
+        self.setCheckable(True)
+        self._close_hovered = False
+
+    def paintEvent(self, event):
+        # Delegate to parent for the button look
+        super().paintEvent(event)
+
+    def mousePressEvent(self, event):
+        # Detect click on the close region (right 18px)
+        if event.button() == Qt.MouseButton.LeftButton:
+            if event.position().x() > self.width() - 20:
+                self.close_requested.emit()
+                return
+        super().mousePressEvent(event)
+
+
+class _CustomTabBar(QWidget):
+    """Horizontal row of pill tabs + a '+' new-tab button."""
+    tab_switched = pyqtSignal(int)
+    tab_close_requested = pyqtSignal(int)
+    new_tab_requested = pyqtSignal()
+
+    _TAB_STYLE = """
+    QPushButton {
+        background: rgba(255,255,255,0.07);
+        color: rgba(200,210,240,0.55);
+        border: none;
+        border-radius: 8px;
+        padding: 5px 28px 5px 14px;
+        font-size: 12px;
+        font-weight: 500;
+        min-width: 90px;
+        max-width: 200px;
+        text-align: left;
+    }
+    QPushButton:hover {
+        background: rgba(255,255,255,0.11);
+        color: rgba(200,210,240,0.80);
+    }
+    QPushButton:checked {
+        background: rgba(255,255,255,0.18);
+        color: #cdd6f4;
+        font-weight: 700;
+    }
+    QPushButton#new_tab_btn {
+        background: transparent;
+        color: rgba(200,210,240,0.50);
+        border: none;
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 16px;
+        min-width: 28px;
+        max-width: 28px;
+    }
+    QPushButton#new_tab_btn:hover {
+        background: rgba(255,255,255,0.12);
+        color: #cdd6f4;
+    }
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(self._TAB_STYLE)
+        self._tabs = []   # list of _TabPill
+        self._tab_widget = None
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(4, 4, 4, 4)
+        self._layout.setSpacing(3)
+        self._layout.addStretch()
+        self._new_btn = QPushButton("+")
+        self._new_btn.setObjectName("new_tab_btn")
+        self._new_btn.setToolTip("New Tab  (Ctrl+T)")
+        self._new_btn.clicked.connect(self.new_tab_requested)
+        self._layout.addWidget(self._new_btn)
+
+    def set_tab_widget(self, tw):
+        self._tab_widget = tw
+        tw.currentChanged.connect(self._sync_selection)
+
+    def add_tab(self, label):
+        idx = len(self._tabs)
+        btn = _TabPill(f"  {label}  ×")
+        btn.setCheckable(True)
+        btn.clicked.connect(lambda _, i=idx: self._switch(i))
+        btn.close_requested.connect(lambda i=idx: self.tab_close_requested.emit(i))
+        # Re-bind indices dynamically
+        btn._tab_idx = idx
+        self._tabs.append(btn)
+        # Insert before stretch + new_btn
+        insert_pos = self._layout.count() - 2  # before stretch and new_btn
+        self._layout.insertWidget(insert_pos, btn)
+        self._sync_selection(len(self._tabs) - 1)
+
+    def remove_tab(self, idx):
+        if 0 <= idx < len(self._tabs):
+            btn = self._tabs.pop(idx)
+            self._layout.removeWidget(btn)
+            btn.deleteLater()
+            # Re-wire remaining tabs
+            for i, b in enumerate(self._tabs):
+                b._tab_idx = i
+                try: b.clicked.disconnect()
+                except Exception: pass
+                try: b.close_requested.disconnect()
+                except Exception: pass
+                b.clicked.connect(lambda _, ii=i: self._switch(ii))
+                b.close_requested.connect(lambda ii=i: self.tab_close_requested.emit(ii))
+            if self._tabs:
+                self._sync_selection(min(idx, len(self._tabs) - 1))
+
+    def rename_tab(self, idx, label):
+        if 0 <= idx < len(self._tabs):
+            self._tabs[idx].setText(f"  {label}  ×")
+
+    def _switch(self, idx):
+        if self._tab_widget:
+            self._tab_widget.setCurrentIndex(idx)
+        self._sync_selection(idx)
+        self.tab_switched.emit(idx)
+
+    def _sync_selection(self, idx):
+        for i, btn in enumerate(self._tabs):
+            btn.setChecked(i == idx)
+
+
+class _TitleBar(QWidget):
+    """Custom frameless title bar for Linux/Windows with integrated pill tabs."""
+
+    _BAR_STYLE = """
+    #title_bar {
+        background: rgba(22, 24, 36, 0.98);
+        border-bottom: 1px solid rgba(88, 91, 112, 0.25);
+    }
+    QPushButton#win_btn {
+        background: transparent;
+        border: none;
+        color: rgba(200,210,240,0.55);
+        font-size: 14px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        min-width: 28px;
+    }
+    QPushButton#win_btn:hover { background: rgba(255,255,255,0.10); color: #cdd6f4; }
+    QPushButton#win_close:hover { background: rgba(243,139,168,0.35); color: #f38ba8; }
+    QLabel#app_icon { padding: 0 6px; }
+    """
+
+    def __init__(self, main_win):
+        super().__init__(main_win)
+        self.main_win = main_win
+        self.setObjectName("title_bar")
+        self.setFixedHeight(40)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(self._BAR_STYLE)
+        self._drag_pos = None
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 0, 6, 0)
+        layout.setSpacing(4)
+
+        # App icon
+        icon_lbl = QLabel("⚡")
+        icon_lbl.setObjectName("app_icon")
+        icon_lbl.setStyleSheet("color:#7aa2f7;font-size:15px;")
+        layout.addWidget(icon_lbl)
+
+        # Tab bar
+        self.tab_bar = _CustomTabBar(self)
+        self.tab_bar.new_tab_requested.connect(main_win.new_tab)
+        self.tab_bar.tab_switched.connect(
+            lambda i: main_win.tabs.setCurrentIndex(i))
+        self.tab_bar.tab_close_requested.connect(main_win.close_tab)
+        layout.addWidget(self.tab_bar, 1)
+
+        # Spacer
+        layout.addStretch()
+
+        # Window controls
+        for sym, obj_name, slot in [
+            ("—", "win_btn", main_win.showMinimized),
+            ("⬜", "win_btn", self._toggle_max),
+            ("✕", "win_close", main_win.close),
+        ]:
+            btn = QPushButton(sym)
+            btn.setObjectName(obj_name)
+            btn.clicked.connect(slot)
+            layout.addWidget(btn)
+
+    def _toggle_max(self):
+        if self.main_win.isMaximized():
+            self.main_win.showNormal()
+        else:
+            self.main_win.showMaximized()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos and event.buttons() & Qt.MouseButton.LeftButton:
+            delta = event.globalPosition().toPoint() - self._drag_pos
+            self.main_win.move(self.main_win.pos() + delta)
+            self._drag_pos = event.globalPosition().toPoint()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+
+    def mouseDoubleClickEvent(self, event):
+        self._toggle_max()
+
+
+class _MacToolbarTabBar(_CustomTabBar):
+    """Tab bar variant styled for the macOS unified toolbar."""
+
+    _MAC_STYLE = """
+    QPushButton {
+        background: rgba(255,255,255,0.08);
+        color: rgba(200,210,240,0.55);
+        border: none;
+        border-radius: 8px;
+        padding: 5px 28px 5px 14px;
+        font-size: 12px;
+        font-weight: 500;
+        min-width: 90px;
+        max-width: 200px;
+        text-align: left;
+    }
+    QPushButton:hover  { background:rgba(255,255,255,0.13); color:rgba(200,210,240,0.85); }
+    QPushButton:checked { background:rgba(255,255,255,0.20); color:#cdd6f4; font-weight:700; }
+    QPushButton#new_tab_btn {
+        background:transparent; color:rgba(200,210,240,0.50); border:none;
+        border-radius:8px; padding:5px 10px; font-size:16px; min-width:28px; max-width:28px;
+    }
+    QPushButton#new_tab_btn:hover { background:rgba(255,255,255,0.12); color:#cdd6f4; }
+    """
+
+    def __init__(self, tab_widget, main_win):
+        super().__init__(main_win)
+        self.setStyleSheet(self._MAC_STYLE)
+        self.set_tab_widget(tab_widget)
+        self.new_tab_requested.connect(main_win.new_tab)
+        self.tab_switched.connect(lambda i: tab_widget.setCurrentIndex(i))
+        self.tab_close_requested.connect(main_win.close_tab)
+
+
 class TerminalApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setObjectName("MainWindow")
         self.setWindowTitle("Velora")
-        
+
         self.setup_core_wrappers()
-        
+
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'velora.png')
         self.setWindowIcon(QIcon(icon_path))
-        self.resize(900, 600)
-
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setStyleSheet("background:transparent;")
+        self.resize(960, 640)
 
         self.settings = QSettings("Velora", "Settings")
+        self._drag_pos = None  # for frameless drag on Linux/Windows
 
-        self.central_container = QWidget()
-        self.central_container.setObjectName("MainContainer")
-        self.central_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.central_layout = QVBoxLayout(self.central_container)
-        self.central_layout.setContentsMargins(0, 0, 0, 0)
-        self.central_layout.setSpacing(0)
+        IS_MAC = sys.platform == "darwin"
 
-        self.tabs = QTabWidget()
-        self.tabs.setTabsClosable(True)
-        self.tabs.setMovable(True)           # drag-to-reorder tabs
-        self.tabs.setElideMode(Qt.TextElideMode.ElideRight)  # elide long names
-        self.tabs.tabCloseRequested.connect(self.close_tab)
-        self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.tabs.customContextMenuRequested.connect(self.show_tab_context_menu)
-        self.central_layout.addWidget(self.tabs)
-        self.setCentralWidget(self.central_container)
-        
-        self.add_tab_btn = QToolButton()
-        self.add_tab_btn.setText("+")
-        self.add_tab_btn.setToolTip("Open New Tab (Ctrl+T)")
-        self.add_tab_btn.clicked.connect(self.new_tab)
-        self.tabs.setCornerWidget(self.add_tab_btn, Qt.Corner.TopRightCorner)
+        # ── macOS: unified title-bar toolbar holds the tabs ──────────────────
+        if IS_MAC:
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            self.setStyleSheet("background:transparent;")
 
+            # Unified toolbar — tabs will live here
+            self._title_toolbar = self.addToolBar("tabs")
+            self._title_toolbar.setMovable(False)
+            self._title_toolbar.setFloatable(False)
+            self._title_toolbar.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
+            self.setUnifiedTitleAndToolBarOnMac(True)
+
+            self.central_container = QWidget()
+            self.central_container.setObjectName("MainContainer")
+            self.central_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            self.central_layout = QVBoxLayout(self.central_container)
+            self.central_layout.setContentsMargins(0, 0, 0, 0)
+            self.central_layout.setSpacing(0)
+
+            self.tabs = QTabWidget()
+            self.tabs.setTabsClosable(True)
+            self.tabs.setMovable(True)
+            self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
+            self.tabs.tabCloseRequested.connect(self.close_tab)
+            self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.tabs.customContextMenuRequested.connect(self.show_tab_context_menu)
+            # Hide the built-in tab bar — we render tabs in the toolbar
+            self.tabs.tabBar().hide()
+            self.central_layout.addWidget(self.tabs)
+            self.setCentralWidget(self.central_container)
+
+            # Custom tab bar widget embedded in toolbar
+            self._mac_tab_bar = _MacToolbarTabBar(self.tabs, self)
+            self._title_toolbar.addWidget(self._mac_tab_bar)
+
+        # ── Linux / Windows: frameless window with custom title bar ──────────
+        else:
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint |
+                Qt.WindowType.Window
+            )
+            self.setStyleSheet("background:transparent;")
+
+            self.central_container = QWidget()
+            self.central_container.setObjectName("MainContainer")
+            self.central_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            self.central_layout = QVBoxLayout(self.central_container)
+            self.central_layout.setContentsMargins(0, 0, 0, 0)
+            self.central_layout.setSpacing(0)
+
+            # Custom title bar
+            self._title_bar = _TitleBar(self)
+            self.central_layout.addWidget(self._title_bar)
+
+            self.tabs = QTabWidget()
+            self.tabs.setTabsClosable(True)
+            self.tabs.setMovable(True)
+            self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
+            self.tabs.tabCloseRequested.connect(self.close_tab)
+            self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.tabs.customContextMenuRequested.connect(self.show_tab_context_menu)
+            # Hide built-in tab bar — title bar has our custom one
+            self.tabs.tabBar().hide()
+            self.central_layout.addWidget(self.tabs)
+            self.setCentralWidget(self.central_container)
+
+            # Wire the title bar's tab bar to the tab widget
+            self._title_bar.tab_bar.set_tab_widget(self.tabs)
+
+        # ── Shared setup ─────────────────────────────────────────────────────
         self.status_bar = self.statusBar()
         self.update_btn = QPushButton("  🔔 Updates Available  ")
         self.update_btn.setVisible(False)
         self.update_btn.clicked.connect(self.show_detailed_updates)
         self.status_bar.addPermanentWidget(self.update_btn)
-        
+
         self.update_status_bar(int(self.settings.value("font_size", 11)))
-        
+
         # Shortcuts
         self.shortcut_new_tab = QShortcut(QKeySequence("Ctrl+T"), self)
         self.shortcut_new_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
@@ -2376,7 +2704,7 @@ class TerminalApp(QMainWindow):
         self.shortcut_close_tab = QShortcut(QKeySequence("Ctrl+W"), self)
         self.shortcut_close_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self.shortcut_close_tab.activated.connect(self.handle_shortcut_ctrl_w)
-        
+
         self.shortcut_next_tab = QShortcut(QKeySequence("Ctrl+Tab"), self)
         self.shortcut_next_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self.shortcut_next_tab.activated.connect(self.next_tab)
@@ -2390,10 +2718,9 @@ class TerminalApp(QMainWindow):
         self.shortcut_fullscreen.activated.connect(self.toggle_fullscreen)
 
         self.tab_counter = 0
-
         self.new_tab()
         self.apply_theme()
-        
+
         self.update_checker = UpdateChecker()
         self.update_checker.update_notif.connect(self.show_update_notification)
         self.update_checker.start()
@@ -2670,10 +2997,12 @@ class TerminalApp(QMainWindow):
 
     def new_tab(self, *args):
         self.tab_counter += 1
+        label = f"❯_ Terminal {self.tab_counter}"
         splitter = TerminalSplitter(self.settings, self)
-        idx = self.tabs.addTab(splitter, f" ❯_  Terminal {self.tab_counter}")
+        idx = self.tabs.addTab(splitter, label)
         self.tabs.setCurrentIndex(idx)
-        # Focus is handled in TerminalSplitter.add_session()
+        # Add pill to the custom tab bar
+        self._get_custom_tab_bar().add_tab(label)
 
     def close_tab_by_widget(self, widget):
         """Called by a TerminalSplitter when its last session exits.
@@ -2708,11 +3037,13 @@ class TerminalApp(QMainWindow):
 
         if self.tabs.count() > 1:
             self.tabs.removeTab(index)
+            self._get_custom_tab_bar().remove_tab(index)
             if widget is not None:
                 widget.deleteLater()
         elif force:
             # Last tab but shell exited — open a fresh tab so window stays open
             self.tabs.removeTab(index)
+            self._get_custom_tab_bar().remove_tab(index)
             if widget is not None:
                 widget.deleteLater()
             self.new_tab()
@@ -2720,7 +3051,15 @@ class TerminalApp(QMainWindow):
             # User explicitly closed the last tab — quit
             self.close()
 
+    def _get_custom_tab_bar(self):
+        """Return the active custom tab bar widget (platform-specific)."""
+        if sys.platform == "darwin":
+            return getattr(self, "_mac_tab_bar", None) or _CustomTabBar()
+        else:
+            return getattr(self, "_title_bar", _TitleBar(self)).tab_bar
+
     def close_current_tab(self, *args):
+
         self.close_tab(self.tabs.currentIndex())
         
     def next_tab(self, *args):
