@@ -16,6 +16,10 @@ import py_compile
 import subprocess
 import platform
 import terminal_utils
+import sys
+print(f"DEBUG VPM: sys.path: {sys.path}")
+print(f"DEBUG VPM: terminal_utils type: {type(terminal_utils)}")
+print(f"DEBUG VPM: terminal_utils dir: {dir(terminal_utils)}")
 
 def clean_version(v):
     if not v: return "0.0.0"
@@ -518,6 +522,7 @@ def update_all():
                 terminal_utils.print_status(f"Build error: {e}", type="error")
 
 def upgrade_terminal():
+    print(f"DEBUG UPGRADE: terminal_utils has print_status: {hasattr(terminal_utils, 'print_status')}")
     if IS_FROZEN:
         terminal_utils.print_status("Cannot perform over-the-air terminal upgrades on compiled native binaries.", type="error")
         print(f"  {terminal_utils.GREY}Please download the latest executable installer or rebuild using build.py.{terminal_utils.RESET}")
