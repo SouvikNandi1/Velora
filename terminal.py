@@ -1,4 +1,4 @@
-__version__ = "1.79.0"
+__version__ = "1.80.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -2388,6 +2388,14 @@ class TerminalApp(QMainWindow):
         )
 
 if __name__ == '__main__':
+    # Fix for Windows Taskbar Icon: Ensure the custom PNG icon shows up in the taskbar
+    if os.name == 'nt':
+        import ctypes
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("qelaro.velora.terminal")
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
     
     icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'velora.png')

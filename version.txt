@@ -793,3 +793,8 @@ v1.78.0
 v1.79.0
 - Updated system-specific bootstrap update commands in `terminal.py` to match the remote installation strings defined in the README.
 - Replaced local file path references with GitHub-based curl and powershell commands for over-the-air updates.
+
+v1.80.0
+- Fixed an issue on Windows where the application icon (PNG) was not correctly displayed in the taskbar.
+- Implemented `SetCurrentProcessExplicitAppUserModelID` to force Windows to associate the Python process with the Velora brand icon.
+- Synchronized bootstrapper and package manager versions for the v1.80.0 ecosystem release.
