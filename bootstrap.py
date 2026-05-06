@@ -46,15 +46,36 @@ def secure_installation(directory):
 
 def create_shortcut():
     print("[*] Creating Desktop Shortcut...")
-    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    
+    system = platform.system()
+    if system == "Windows":
+        # On Windows, try to get the actual Desktop path
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
+            desktop = winreg.QueryValueEx(key, "Desktop")[0]
+            winreg.CloseKey(key)
+        except (ImportError, OSError):
+            # Fallback to default path
+            desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    else:
+        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    
     icon_path = os.path.join(INSTALL_DIR, "src", "velora.png")
     script_path = os.path.join(INSTALL_DIR, "terminal.py")
     python_exe = sys.executable
-
-    system = platform.system()
     try:
         if system == "Windows":
             shortcut_path = os.path.join(desktop, "Velora.lnk")
+            print(f"[*] Desktop path: {desktop}")
+            print(f"[*] Shortcut path: {shortcut_path}")
+            print(f"[*] Python exe: {python_exe}")
+            print(f"[*] Script path: {script_path}")
+            print(f"[*] Icon path: {icon_path}")
+            
+            # Ensure desktop directory exists
+            os.makedirs(desktop, exist_ok=True)
+            
             # Use PowerShell to create a native Windows shortcut
             ps_cmd = (
                 f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{shortcut_path}');"
@@ -63,7 +84,27 @@ def create_shortcut():
                 f"$s.IconLocation='{icon_path}';"
                 f"$s.Save()"
             )
-            subprocess.run(["powershell", "-Command", ps_cmd], check=True)
+            print(f"[*] Running PowerShell command: {ps_cmd}")
+            # Try PowerShell first
+            try:
+                result = subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True, text=True, timeout=10)
+                if result.returncode != 0:
+                    print(f"[!] PowerShell error: {result.stderr}")
+                    print(f"[!] PowerShell stdout: {result.stdout}")
+                    raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+                else:
+                    print("[*] PowerShell command succeeded")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+                print(f"[!] PowerShell shortcut creation failed: {e}")
+                print("[*] Falling back to batch file creation...")
+                
+                # Fallback: Create a batch file
+                batch_path = os.path.join(desktop, "Velora.bat")
+                batch_content = f'@echo off\n"{python_exe}" "{script_path}"\n'
+                with open(batch_path, 'w') as f:
+                    f.write(batch_content)
+                print(f"[*] Created batch file: {batch_path}")
+                shortcut_path = batch_path
 
         elif system == "Linux":
             shortcut_path = os.path.join(desktop, "Velora.desktop")
@@ -90,6 +131,7 @@ def create_shortcut():
         print(f"\x1b[32;1m[+] Shortcut created successfully on your Desktop!\x1b[0m")
     except Exception as e:
         print(f"\x1b[31;1m[-] Failed to create shortcut: {e}\x1b[0m")
+        print(f"\x1b[33m[!] You can still launch Velora manually: {python_exe} {script_path}\x1b[0m")
 
 def main():
     print(f"\x1b[36;1m═══ Velora Online Bootstrapper v{VERSION} ═══\x1b[0m")
