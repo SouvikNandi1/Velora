@@ -935,14 +935,11 @@ class _UpdateCheckerWorker(QThread):
                     try:
                         with open(local_path, 'r', encoding='utf-8') as f:
                             content = f.read()
-                        # Skip encrypted stubs — can't extract version
-                        if '# Velora Encrypted Source' in content or '__payload__' in content:
-                            continue
+                        # Extract version or default to 0.0.0 for unknown/encrypted
                         m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']',
                                       content, re.MULTILINE)
-                        if not m:
-                            continue
-                        local_pkg_ver = m.group(1).strip()
+                        local_pkg_ver = m.group(1).strip() if m else "0.0.0"
+                        
                         if self._is_newer(cloud_pkg_ver, local_pkg_ver):
                             pkg_updates.append((pkg_name, local_pkg_ver, cloud_pkg_ver))
                     except Exception:
@@ -2045,8 +2042,8 @@ class UpdateChecker(QThread):
                                 try:
                                     with open(local_path, 'r', encoding='utf-8') as f: content = f.read()
                                     m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-                                    local_ver = m.group(1).strip() if m else "1.0.0"
-                                except Exception: local_ver = "1.0.0"
+                                    local_ver = m.group(1).strip() if m else "0.0.0"
+                                except Exception: local_ver = "0.0.0"
                                 
                                 if self.is_newer(cloud_ver, local_ver):
                                     pkg_updates.append(pkg)
