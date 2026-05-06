@@ -1,4 +1,4 @@
-__version__ = "1.21.0"
+__version__ = "1.22.0"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -13,6 +13,8 @@ import shutil
 import re
 import time
 import py_compile
+import subprocess
+import terminal_utils
 
 def clean_version(v):
     if not v: return "0.0.0"
@@ -158,22 +160,15 @@ def download_with_progress(req):
                     break
                 chunks.append(chunk)
                 downloaded += len(chunk)
-                percent = min(100, int((downloaded / total_size) * 100))
-                bar = "#" * (percent // 2) + "-" * (50 - (percent // 2))
-                sys.stdout.write(f"\r  \x1b[36m[\x1b[32;1m{bar}\x1b[36m] {percent}%\x1b[0m")
-                sys.stdout.flush()
-            
-            bar = "#" * 50
-            sys.stdout.write(f"\r  \x1b[36m[\x1b[32;1m{bar}\x1b[36m] 100%\x1b[0m\n")
+                terminal_utils.progress_bar(downloaded, total_size, prefix="Downloading:", suffix=f"({downloaded/1024:.1f} KB)")
             data = b"".join(chunks)
         else:
             data = response.read()
-            for i in range(0, 101, 5):
-                bar = "#" * (i // 2) + "-" * (50 - (i // 2))
-                sys.stdout.write(f"\r  \x1b[36m[\x1b[32;1m{bar}\x1b[36m] {i}%\x1b[0m")
-                sys.stdout.flush()
-                time.sleep(0.01)
-            sys.stdout.write("\n")
+            # Fake progress for unknown size
+            for i in range(1, 101, 5):
+                terminal_utils.progress_bar(i, 100, prefix="Downloading:", suffix="...")
+                time.sleep(0.02)
+            terminal_utils.progress_bar(100, 100, prefix="Downloading:", suffix="Done")
         return json.loads(data.decode('utf-8'))
 
 def list_packages():
@@ -190,7 +185,7 @@ def list_packages():
             except: pass
 
             if not data or data == 'null':
-                print("\n  \x1b[90mNo packages found in the cloud.\x1b[0m")
+                terminal_utils.print_status("No packages found in the cloud.", type="info")
                 return
             
             official = []
@@ -205,32 +200,31 @@ def list_packages():
             official.sort()
             community.sort()
 
-            print("\n\x1b[38;2;189;147;249m┏━━━━ Velora Cloud Registry ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\x1b[0m")
-            print(f"\x1b[90m┃ {'Package':<17} {'Version':<10} {'Author':<14} {'Description':<29} ┃\x1b[0m")
+            terminal_utils.print_header("Velora Cloud Registry", color=terminal_utils.PURPLE)
+            
+            table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
+                                         colors=[terminal_utils.CYAN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
 
-            def print_section(title, items, pkg_color):
-                print(f"\x1b[90m┣━━ \x1b[35;1m{title:<68}\x1b[90m ━━┫\x1b[0m")
+            def add_section_to_table(title, items, icon=""):
                 for pkg, info in items:
-                    icon = "✅" if title == "Verified Official Suite" else "  "
                     version = info.get('version', 'v1.0.0')
                     author = info.get('author', 'Unknown')[:12]
                     desc = info.get('description', '').replace('✅', '').strip()
                     desc = (desc[:29] + '..') if len(desc) > 29 else desc
                     is_installed = "*" if pkg in local_pkgs else " "
                     
-                    print(f"\x1b[90m┃\x1b[0m {icon}{is_installed} {pkg_color}{pkg:<13}\x1b[0m {version:<10} \x1b[33m{author:<14}\x1b[0m {desc:<29} \x1b[90m┃\x1b[0m")
+                    table.add_row([f"{icon}{is_installed}{pkg}", version, author, desc])
 
             if official:
-                print_section("Verified Official Suite", official, "\x1b[36;1m")
+                add_section_to_table("Official", official, icon="✅")
             
             if community:
-                if official: print("\x1b[90m┃ " + " " * 73 + " ┃\x1b[0m")
-                print_section("Community Registry", community, "\x1b[32m")
+                add_section_to_table("Community", community)
 
-            print("\x1b[38;2;189;147;249m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\x1b[0m")
-            print(f"\x1b[90m Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'\x1b[0m")
+            table.print()
+            print(f"  {terminal_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{terminal_utils.RESET}")
     except Exception as e:
-        print(f"\x1b[31;1mError fetching packages:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error fetching packages: {e}", type="error")
 
 def get_cloud_packages():
     """Returns a dictionary of packages from SNCloud for UI consumption."""
@@ -272,77 +266,21 @@ def get_local_packages_info():
     return pkgs_info
 
 def list_local_packages():
-
-    print("\n\x1b[36;1m═══ 📂 LOCAL INSTALLED PACKAGES ═══\x1b[0m")
-    count = 0
-    pkgs = get_local_packages_dict()
-    for pkg, file_path in sorted(pkgs.items()):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                code = f.read()
-            v_m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
-            version = v_m.group(1) if v_m else "1.0.0"
-            a_m = re.search(r'^__author__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
-            author = a_m.group(1) if a_m else "Unknown"
-            w_m = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
-            website = w_m.group(1) if w_m else ""
-            d_m = re.search(r'^__description__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
-            desc = d_m.group(1) if d_m else "Local Velora program"
-
-            print(f"\n  \x1b[90m╭─────────────────────────────────────────────────────╮\x1b[0m")
-            print(f"  \x1b[90m│\x1b[0m  \x1b[32;1m{pkg:<25}\x1b[0m \x1b[33m{('v'+version):>10}\x1b[0m              \x1b[90m│\x1b[0m")
-            print(f"  \x1b[90m│\x1b[0m  \x1b[90mStatus:\x1b[0m \x1b[32;1mInstalled\x1b[0m{(' ' * 36)}\x1b[90m│\x1b[0m")
-            print(f"  \x1b[90m│\x1b[0m  \x1b[90mBy:\x1b[0m {author:<45}  \x1b[90m│\x1b[0m")
-            print(f"  \x1b[90m├─────────────────────────────────────────────────────┤\x1b[0m")
-            display_desc = (desc[:49] + '..') if len(desc) > 49 else desc
-            print(f"  \x1b[90m│\x1b[0m  {display_desc:<49}  \x1b[90m│\x1b[0m")
-            print(f"  \x1b[90m╰─────────────────────────────────────────────────────╯\x1b[0m")
-            count += 1
-        except Exception: pass
-
-    term_ver = os.environ.get("VELORA_VERSION")
-    term_author, term_site, term_desc = "Souvik", "https://github.com/SouvikNandi1/Velora", "Velora Terminal Core Application"
-
-    if term_ver:
-        term_path = os.environ.get("VELORA_TERMINAL_PATH")
-        if not term_path or not os.path.exists(term_path):
-            term_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
-        if os.path.exists(term_path):
-            try:
-                with open(term_path, 'r', encoding='utf-8') as f: term_code = f.read()
-                a_m = re.search(r'^__author__\s*=\s*["\']([^"\']+)["\']', term_code, re.MULTILINE)
-                if a_m: term_author = a_m.group(1)
-                w_m = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', term_code, re.MULTILINE)
-                if w_m: term_site = w_m.group(1)
-                d_m = re.search(r'^__description__\s*=\s*["\']([^"\']+)["\']', term_code, re.MULTILINE)
-                if d_m: term_desc = d_m.group(1)
-            except Exception: pass
-
-        print(f"\n  \x1b[90m╭─────────────────────────────────────────────────────╮\x1b[0m")
-        print(f"  \x1b[90m│\x1b[0m  \x1b[36;1mVelora Terminal App\x1b[0m       \x1b[33m{('v'+term_ver):>10}\x1b[0m              \x1b[90m│\x1b[0m")
-        print(f"  \x1b[90m│\x1b[0m  \x1b[90mStatus:\x1b[0m \x1b[32;1mInstalled\x1b[0m{(' ' * 36)}\x1b[90m│\x1b[0m")
-        print(f"  \x1b[90m│\x1b[0m  \x1b[90mBy:\x1b[0m {term_author:<45}  \x1b[90m│\x1b[0m")
-        print(f"  \x1b[90m├─────────────────────────────────────────────────────┤\x1b[0m")
-        display_desc = (term_desc[:49] + '..') if len(term_desc) > 49 else term_desc
-        print(f"  \x1b[90m│\x1b[0m  {display_desc:<49}  \x1b[90m│\x1b[0m")
-        print(f"  \x1b[90m╰─────────────────────────────────────────────────────╯\x1b[0m")
-    else:
-        term_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
-        if os.path.exists(term_path):
-            try:
-                with open(term_path, 'r', encoding='utf-8') as f: term_code = f.read()
-                v_match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', term_code, re.MULTILINE)
-                term_ver = v_match.group(1) if v_match else "unknown"
-                author = "Unknown"
-                a_match = re.search(r'^__author__\s*=\s*["\']([^"\']+)["\']', term_code, re.MULTILINE)
-                if a_match: author = a_match.group(1)
-                website = ""
-                w_match = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', term_code, re.MULTILINE)
-                if w_match: website = w_match.group(1)
-                auth_str = f" \x1b[90mby {author}\x1b[0m" if author != 'Unknown' else ""
-                site_str = f" \x1b[34;4m({website})\x1b[0m" if website else ""
-                print(f"\n  \x1b[36;1mVelora Terminal App\x1b[0m \x1b[33m(v{term_ver})\x1b[0m{auth_str}{site_str}")
-            except Exception: pass
+    terminal_utils.print_header("Local Installed Packages", color=terminal_utils.CYAN)
+    
+    pkgs = get_local_packages_info()
+    table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
+                                 colors=[terminal_utils.GREEN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
+    
+    for pkg in pkgs:
+        table.add_row([pkg['name'], pkg['version'], pkg['author'], pkg['description']])
+    
+    # Add terminal app info
+    term_ver = os.environ.get("VELORA_VERSION", "1.0.0")
+    table.add_row(["Velora Terminal", term_ver, "Souvik", "Velora Terminal Core Application"])
+    
+    table.print()
+    terminal_utils.print_status(f"Found {len(pkgs) + 1} installed packages.", type="info")
 
 def install_package(pkg_name):
     url = f"{get_base_url()}/{urllib.parse.quote(pkg_name)}.json?_t={int(time.time())}"
@@ -350,7 +288,7 @@ def install_package(pkg_name):
         req = get_request(url)
         data = download_with_progress(req)
         if not data or data == 'null':
-            print(f"\x1b[31;1mError:\x1b[0m Package '{pkg_name}' not found on SNCloud.")
+            terminal_utils.print_status(f"Package '{pkg_name}' not found on SNCloud.", type="error")
             return
         
         target_path = os.path.join(USER_CORE_DIR, f"{pkg_name}.py")
@@ -425,7 +363,7 @@ def install_package(pkg_name):
             # Legacy single-file installation
             code = data.get('code')
             if not code:
-                print(f"\x1b[31;1mError:\x1b[0m Invalid package payload from server.")
+                terminal_utils.print_status("Invalid package payload from server.", type="error")
                 return
                 
             version = "1.0.0"
@@ -466,11 +404,10 @@ def install_package(pkg_name):
                 f.write(stub_code)
                 
         create_wrapper(pkg_name)
-        print(f"\x1b[32;1mSuccessfully installed '{pkg_name}'!\x1b[0m")
-        print(f"  \x1b[90mLocation: {target_path}\x1b[0m")
-        print(f"  \x1b[36mExecutable ready: you can now run \x1b[32;1m{pkg_name}\x1b[36m anywhere.\x1b[0m")
+        terminal_utils.print_status(f"Successfully installed '{pkg_name}'!", type="success")
+        terminal_utils.print_labeled("Location", target_path)
     except Exception as e:
-        print(f"\x1b[31;1mError installing package:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error installing package: {e}", type="error")
 
 def install_all_official():
     print("\x1b[36;1mFetching official Velora packages from SNCloud...\x1b[0m")
@@ -506,21 +443,34 @@ def install_all_official():
 def locate_package(pkg_name):
     target_path_user = os.path.join(USER_CORE_DIR, f"{pkg_name}.py")
     target_path_bundled = os.path.join(BUNDLED_CORE_DIR, f"{pkg_name}.py")
-    
+    path_to_reveal = None
     if os.path.exists(target_path_user):
-        print(f"\x1b[36;1mPackage '{pkg_name}' is located at:\x1b[0m")
-        print(f"  \x1b[32m{target_path_user}\x1b[0m (User Update)")
+        path_to_reveal = target_path_user
+        terminal_utils.print_status(f"Package '{pkg_name}' is located at:", type="info")
+        print(f"  {terminal_utils.GREEN}{target_path_user}{terminal_utils.RESET} (User Update)")
         lib_target = os.path.join(USER_CORE_DIR, f"{pkg_name}_lib")
         if os.path.exists(lib_target):
-            print(f"  \x1b[32m{lib_target}\x1b[0m (Library Directory)")
+            print(f"  {terminal_utils.GREEN}{lib_target}{terminal_utils.RESET} (Library Directory)")
     elif os.path.exists(target_path_bundled):
-        print(f"\x1b[36;1mPackage '{pkg_name}' is located at:\x1b[0m")
-        print(f"  \x1b[32m{target_path_bundled}\x1b[0m (Bundled natively inside Velora)")
+        path_to_reveal = target_path_bundled
+        terminal_utils.print_status(f"Package '{pkg_name}' is located at:", type="info")
+        print(f"  {terminal_utils.GREEN}{target_path_bundled}{terminal_utils.RESET} (Bundled natively inside Velora)")
     else:
-        print(f"\x1b[31;1mError:\x1b[0m Package '{pkg_name}' is not installed locally.")
+        terminal_utils.print_status(f"Package '{pkg_name}' is not installed locally.", type="error")
+        return
+
+    if path_to_reveal:
+        try:
+            if sys.platform == 'darwin':
+                subprocess.call(['open', '-R', path_to_reveal])
+            elif os.name == 'nt':
+                subprocess.call(['explorer', '/select,', os.path.normpath(path_to_reveal)])
+            else:
+                subprocess.call(['xdg-open', os.path.dirname(path_to_reveal)])
+        except: pass
 
 def update_all():
-    print("\x1b[36;1mChecking for updates for all installed packages...\x1b[0m")
+    terminal_utils.print_status("Checking for updates for all installed packages...", type="info")
     count = 0
     pkgs = get_local_packages_dict()
     
@@ -531,7 +481,7 @@ def update_all():
             data = json.loads(response.read().decode('utf-8'))
             if not isinstance(data, dict): data = {}
     except Exception as e:
-        print(f"\x1b[31;1mError fetching updates from SNCloud:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error fetching updates from SNCloud: {e}", type="error")
         return
 
     for pkg, file_path in pkgs.items():
@@ -549,22 +499,22 @@ def update_all():
         needs_update = is_newer(cloud_ver, local_ver)
             
         if needs_update:
-            print(f"  \x1b[90mUpdating '{pkg}' (v{local_ver} -> v{cloud_ver})...\x1b[0m")
+            terminal_utils.print_status(f"Updating '{pkg}' (v{local_ver} -> v{cloud_ver})...", type="info")
             install_package(pkg)
             count += 1
 
     if count == 0:
-        print("  \x1b[32;1m✅ All local packages are already up to date.\x1b[0m")
+        terminal_utils.print_status("All local packages are already up to date.", type="success")
     else:
-        print(f"\x1b[32;1mFinished updating {count} packages.\x1b[0m")
+        terminal_utils.print_status(f"Finished updating {count} packages.", type="success")
         build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
         if not IS_FROZEN and os.path.exists(build_script):
-            print("\x1b[36;1mAutomatically building new executable version...\x1b[0m")
+            terminal_utils.print_status("Automatically building new executable version...", type="info")
             import subprocess
             try:
                 subprocess.call([sys.executable, build_script])
             except Exception as e:
-                print(f"\x1b[31;1mBuild error:\x1b[0m {e}")
+                terminal_utils.print_status(f"Build error: {e}", type="error")
 
 def upgrade_terminal():
     if IS_FROZEN:
@@ -606,7 +556,7 @@ def upgrade_terminal():
         print(f"\x1b[31;1mError upgrading terminal:\x1b[0m {e}")
 
 def check_updates():
-    print("\x1b[36;1mChecking for updates on SNCloud...\x1b[0m")
+    terminal_utils.print_status("Checking for updates on SNCloud...", type="info")
     app_update = None
     app_current = "1.0.0"
     pkg_updates = []
@@ -623,7 +573,6 @@ def check_updates():
                 if m:
                     cloud_bootstrap_ver = m.group(1)
                     # Get local bootstrap version
-                    # Look for bootstrap.py relative to script location or standard install path
                     local_bootstrap_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bootstrap.py")
                     if not os.path.exists(local_bootstrap_path):
                         local_bootstrap_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "bootstrap.py")
@@ -640,13 +589,13 @@ def check_updates():
                     except Exception:
                         if cloud_bootstrap_ver != bootstrap_current: bootstrap_update = cloud_bootstrap_ver
         except Exception: pass
+
         project_id, _ = get_remote_credentials()
         req = get_request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}")
         with urllib.request.urlopen(req, context=get_context(), timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
             if data and data != 'null':
                 cloud_ver = data.get('version', '1.0.0') if isinstance(data, dict) else '1.0.0'
-                # Prioritize file-based version detection to avoid stale environment variables
                 term_path = os.environ.get("VELORA_TERMINAL_PATH")
                 if not term_path or not os.path.exists(term_path):
                     term_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
@@ -682,29 +631,33 @@ def check_updates():
                                 if is_newer(cloud_ver, local_ver): pkg_updates.append((pkg, local_ver, cloud_ver))
                             except Exception: pass
                             
-        print("\n\x1b[36;1m=== 🖥️  Velora Terminal Status ===\x1b[0m")
+        terminal_utils.print_section("Velora Update Center", color=terminal_utils.PURPLE)
+        
+        # Terminal Status
         if app_update:
-            print(f"  \x1b[31;1mOutdated\x1b[0m \x1b[90m(v{app_current} ->\x1b[0m \x1b[32;1mv{app_update}\x1b[0m)")
-            print("  \x1b[33m🔔 Run \x1b[32;1mvpm upgrade\x1b[33m to install the new version.\x1b[0m")
+            terminal_utils.print_status(f"Terminal Outdated: {terminal_utils.RED}{app_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{app_update}{terminal_utils.RESET}", type="warning")
+            print(f"  {terminal_utils.YELLOW}🔔 Run 'vpm upgrade' to install the new version.{terminal_utils.RESET}")
         else:
-            print(f"  \x1b[32;1m✅ Up to date\x1b[0m \x1b[90m(v{app_current})\x1b[0m")
+            terminal_utils.print_status(f"Terminal Up to date (v{app_current})", type="success")
 
-        print("\n\x1b[36;1m=== 🚀 Bootstrap Status ===\x1b[0m")
+        # Bootstrap Status
         if bootstrap_update:
-            print(f"  \x1b[31;1mOutdated\x1b[0m \x1b[90m(v{bootstrap_current} ->\x1b[0m \x1b[32;1mv{bootstrap_update}\x1b[0m)")
-            print("  \x1b[33m🔔 Re-run the bootstrap installer to update.\x1b[0m")
+            terminal_utils.print_status(f"Bootstrap Outdated: {terminal_utils.RED}{bootstrap_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{bootstrap_update}{terminal_utils.RESET}", type="warning")
+            print(f"  {terminal_utils.YELLOW}🔔 Re-run the bootstrap installer to update.{terminal_utils.RESET}")
         else:
-            print(f"  \x1b[32;1m✅ Up to date\x1b[0m \x1b[90m(v{bootstrap_current})\x1b[0m")
+            terminal_utils.print_status(f"Bootstrap Up to date (v{bootstrap_current})", type="success")
 
-        print("\n\x1b[36;1m=== 📦 Upgradable Packages ===\x1b[0m")
+        # Package Status
         if pkg_updates:
+            print(f"\n  {terminal_utils.BOLD}{terminal_utils.CYAN}Upgradable Packages:{terminal_utils.RESET}")
             for p, l_ver, c_ver in pkg_updates: 
-                print(f"  \x1b[31;1m{p}\x1b[0m \x1b[90m(v{l_ver} ->\x1b[0m \x1b[32;1mv{c_ver}\x1b[90m)\x1b[0m")
-            print(f"\n  \x1b[33m🔔 Run \x1b[32;1mvpm update-all\x1b[33m to update {len(pkg_updates)} package(s).\x1b[0m")
+                print(f"  {terminal_utils.PINK}• {p:<15}{terminal_utils.RESET} {terminal_utils.RED}{l_ver}{terminal_utils.RESET} -> {terminal_utils.GREEN}{c_ver}{terminal_utils.RESET}")
+            print(f"\n  {terminal_utils.YELLOW}🔔 Run 'vpm update-all' to update {len(pkg_updates)} package(s).{terminal_utils.RESET}")
         else:
-            print("  \x1b[32;1m✅ All local packages are up to date!\x1b[0m")
+            terminal_utils.print_status("All local packages are up to date!", type="success")
+            
     except Exception as e:
-        print(f"\x1b[31;1mError checking updates:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error checking updates: {e}", type="error")
 
 def publish_package(pkg_name, file_path, description="", entry_file=""):
     if not os.path.exists(file_path):
@@ -895,24 +848,26 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
         
     args = sys.argv[1:]
+    args = sys.argv[1:]
     if not args:
-        print("\x1b[36;1mVelora Package Manager (VPM)\x1b[0m\n")
-        print("  \x1b[33mUsage:\x1b[0m")
-        print("  vpm list                          \x1b[90m- List all packages on SNCloud\x1b[0m")
-        print("  vpm local                         \x1b[90m- List local installed packages and versions\x1b[0m")
-        print("  vpm check                         \x1b[90m- Check SNCloud for available updates\x1b[0m")
-        print("  vpm locate <pkg>                  \x1b[90m- Show the installation path of a package\x1b[0m")
-        print("  vpm install <pkg>                 \x1b[90m- Download and install a package\x1b[0m")
-        print("  vpm install all                   \x1b[90m- Install all official verified packages\x1b[0m")
-        print("  vpm update <pkg>                  \x1b[90m- Update an installed package\x1b[0m")
-        print("  vpm update-all                    \x1b[90m- Update all installed packages\x1b[0m")
-        print("  vpm upgrade                       \x1b[90m- Upgrade the main Velora Terminal App\x1b[0m")
-        print("  vpm remove <pkg>                  \x1b[90m- Delete a local package\x1b[0m")
-        print("  vpm build                         \x1b[90m- Compile Velora to a standalone executable\x1b[0m")
-        print("  vpm publish <pkg> <file/dir> [desc] [entry] \x1b[90m- Upload to SNCloud\x1b[0m")
-        print("  vpm unpublish <pkg>               \x1b[90m- Delete a package from SNCloud\x1b[0m")
-        print("  vpm publish-app                   \x1b[90m- Upload terminal.py to SNCloud\x1b[0m")
-        print("  vpm publish-main <password>       \x1b[90m- Upload all core files to SNCloud\x1b[0m")
+        terminal_utils.print_header("Velora Package Manager (VPM)", color=terminal_utils.PURPLE)
+        print(f"  {terminal_utils.BOLD}{terminal_utils.YELLOW}Usage:{terminal_utils.RESET}")
+        
+        help_table = terminal_utils.Table(["Command", "Description"], colors=[terminal_utils.CYAN, terminal_utils.GREY])
+        help_table.add_row(["list", "List all packages on SNCloud"])
+        help_table.add_row(["local", "List local installed packages and versions"])
+        help_table.add_row(["check", "Check SNCloud for available updates"])
+        help_table.add_row(["locate <pkg>", "Show the installation path of a package"])
+        help_table.add_row(["install <pkg>", "Download and install a package"])
+        help_table.add_row(["install all", "Install all official verified packages"])
+        help_table.add_row(["update <pkg>", "Update an installed package"])
+        help_table.add_row(["update-all", "Update all installed packages"])
+        help_table.add_row(["upgrade", "Upgrade the main Velora Terminal App"])
+        help_table.add_row(["remove <pkg>", "Delete a local package"])
+        help_table.add_row(["build", "Compile Velora to a standalone executable"])
+        help_table.add_row(["publish <pkg> <file/dir>", "Upload to SNCloud"])
+        help_table.add_row(["unpublish <pkg>", "Delete a package from SNCloud"])
+        help_table.print()
         return
         
     cmd = args[0].lower()

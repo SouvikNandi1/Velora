@@ -1,4 +1,4 @@
-__version__ = "1.87.0"
+__version__ = "1.88.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -50,6 +50,7 @@ import urllib.request
 import json
 import ssl
 import vpm
+import terminal_utils
 
 # -- NATIVE COMPILED CORE EXECUTOR --
 if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
@@ -778,15 +779,28 @@ class VPMPackageCard(QFrame):
         self.local_ver = next((p['version'] for p in local_info if p['name'] == name), None)
         self.cloud_ver = info.get('version', '1.0.0')
         self.is_official = "✅" in info.get('description', '')
+        self.update_available = self.local_ver and is_newer(self.cloud_ver, self.local_ver)
         
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(15, 15, 15, 15)
-        self.layout.setSpacing(8)
+        # Main horizontal layout
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+        
+        # Sidebar Status Accent
+        self.accent_bar = QFrame()
+        self.accent_bar.setFixedWidth(4)
+        self.main_layout.addWidget(self.accent_bar)
+        
+        # Content Layout
+        self.content_widget = QWidget()
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(15, 15, 15, 15)
+        self.content_layout.setSpacing(8)
         
         # Header: Icon and Name
         header = QHBoxLayout()
         icon_lbl = QLabel("📦" if not self.is_official else "🛡️")
-        icon_lbl.setStyleSheet("font-size: 24px;")
+        icon_lbl.setStyleSheet("font-size: 22px;")
         header.addWidget(icon_lbl)
         
         name_lbl = QLabel(name)
@@ -796,27 +810,31 @@ class VPMPackageCard(QFrame):
         
         if self.is_official:
             badge = QLabel("OFFICIAL")
-            badge.setStyleSheet(f"background-color: {theme['sel']}; color: {theme['fg']}; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px;")
+            badge.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(theme['sel'])}, 0.2); color: {theme['fg']}; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; border: 1px solid {theme['sel']};")
             header.addWidget(badge)
             
-        self.layout.addLayout(header)
+        if self.update_available:
+            upd_badge = QLabel("UPDATE")
+            upd_badge.setStyleSheet("background-color: rgba(255, 184, 108, 0.2); color: #ffb86c; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255, 184, 108, 0.4);")
+            header.addWidget(upd_badge)
+            
+        self.content_layout.addLayout(header)
         
         # Description
         desc = info.get('description', '').replace('✅', '').strip()
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
-        desc_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.7); font-size: 12px;")
-        self.layout.addWidget(desc_lbl)
+        desc_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.7); font-size: 12px; line-height: 1.4;")
+        self.content_layout.addWidget(desc_lbl)
         
-        self.layout.addStretch()
+        self.content_layout.addStretch()
         
         # Metadata
         meta = QHBoxLayout()
         author = info.get('author', 'Unknown')
         ver_str = f"v{self.cloud_ver}"
         if self.local_ver:
-            if self.local_ver != self.cloud_ver:
-                ver_str = f"v{self.local_ver} ➜ \x1b[32mv{self.cloud_ver}\x1b[0m" # Note: ANSI won't work in QLabel, use HTML
+            if self.update_available:
                 ver_str = f"<span style='color: gray;'>v{self.local_ver}</span> <span style='color: {theme['border']};'>➜</span> <span style='color: #50fa7b;'>v{self.cloud_ver}</span>"
             else:
                 ver_str = f"<span style='color: #50fa7b;'>v{self.local_ver} (Latest)</span>"
@@ -824,14 +842,14 @@ class VPMPackageCard(QFrame):
         meta_lbl = QLabel(f"By {author}  •  {ver_str}")
         meta_lbl.setStyleSheet(f"font-size: 10px; color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.5);")
         meta.addWidget(meta_lbl)
-        self.layout.addLayout(meta)
+        self.content_layout.addLayout(meta)
         
         # Buttons
         btn_box = QHBoxLayout()
         if not self.local_ver:
             self.main_btn = QPushButton("Install")
             self.main_btn.setObjectName("InstallBtn")
-        elif self.local_ver != self.cloud_ver:
+        elif self.update_available:
             self.main_btn = QPushButton("Update")
             self.main_btn.setObjectName("UpdateBtn")
         else:
@@ -843,12 +861,13 @@ class VPMPackageCard(QFrame):
         btn_box.addWidget(self.main_btn)
         
         self.info_btn = QPushButton("ℹ")
-        self.info_btn.setFixedWidth(30)
+        self.info_btn.setFixedWidth(35)
         self.info_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.info_btn.clicked.connect(lambda: self.action_triggered.emit("info", self.name))
         btn_box.addWidget(self.info_btn)
         
-        self.layout.addLayout(btn_box)
+        self.content_layout.addLayout(btn_box)
+        self.main_layout.addWidget(self.content_widget)
         
         self.apply_styles()
 
@@ -857,6 +876,18 @@ class VPMPackageCard(QFrame):
         border = f"rgba({_hex_to_rgb_str(self.theme['border'])}, 0.3)"
         sel = self.theme['sel']
         fg = self.theme['fg']
+        
+        # Accent Bar Color
+        accent_color = "transparent"
+        if self.local_ver:
+            if self.update_available:
+                accent_color = "#ffb86c" # Orange
+            else:
+                accent_color = "#50fa7b" # Green
+        elif self.is_official:
+            accent_color = "#bd93f9" # Purple
+            
+        self.accent_bar.setStyleSheet(f"background-color: {accent_color}; border-top-left-radius: 12px; border-bottom-left-radius: 12px;")
         
         self.setStyleSheet(f"""
             #PackageCard {{
@@ -872,8 +903,8 @@ class VPMPackageCard(QFrame):
                 background-color: {sel};
                 color: {fg};
                 border: none;
-                border-radius: 6px;
-                padding: 6px;
+                border-radius: 8px;
+                padding: 8px;
                 font-size: 11px;
                 font-weight: bold;
             }}
@@ -882,13 +913,22 @@ class VPMPackageCard(QFrame):
                 color: {self.theme['bg']};
             }}
             #RemoveBtn {{
-                background-color: rgba(255, 85, 85, 0.2);
+                background-color: rgba(255, 85, 85, 0.1);
                 color: #ff5555;
-                border: 1px solid rgba(255, 85, 85, 0.4);
+                border: 1px solid rgba(255, 85, 85, 0.2);
             }}
             #RemoveBtn:hover {{
                 background-color: #ff5555;
                 color: white;
+            }}
+            #UpdateBtn {{
+                background-color: rgba(255, 184, 108, 0.1);
+                color: #ffb86c;
+                border: 1px solid rgba(255, 184, 108, 0.2);
+            }}
+            #UpdateBtn:hover {{
+                background-color: #ffb86c;
+                color: #282a36;
             }}
         """)
 
@@ -917,13 +957,41 @@ class VPMTab(QWidget):
         
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search packages...")
-        self.search_bar.setFixedWidth(250)
+        self.search_bar.setFixedWidth(280)
         self.search_bar.textChanged.connect(self.filter_packages)
+        self.search_bar.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.3);
+                border: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.5);
+                border-radius: 10px;
+                padding: 10px 15px;
+                color: {self.theme['fg']};
+                font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {self.theme['sel']};
+            }}
+        """)
         toolbar.addWidget(self.search_bar)
         
         self.refresh_btn = QPushButton("Refresh Registry")
-        self.refresh_btn.setFixedWidth(120)
+        self.refresh_btn.setFixedWidth(140)
+        self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_btn.clicked.connect(self.refresh_data)
+        self.refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.theme['sel']};
+                color: {self.theme['fg']};
+                border-radius: 10px;
+                padding: 10px;
+                font-size: 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {self.theme['fg']};
+                color: {self.theme['bg']};
+            }}
+        """)
         toolbar.addWidget(self.refresh_btn)
         
         self.layout.addLayout(toolbar)
@@ -1356,7 +1424,6 @@ class TerminalSession(QWidget):
 
     def show_startup_info(self):
         """Display startup information only if updates are available"""
-        info_msg = ""
         updates_found = False
         
         # Determine system-specific bootstrap command
@@ -1368,14 +1435,8 @@ class TerminalSession(QWidget):
         
         # Check for bootstrap/terminal updates
         try:
-            import vpm
             project_id, api_key = vpm.get_remote_credentials()
             if project_id and api_key:
-                import ssl
-                import urllib.request
-                import json
-                import time
-                
                 ctx = ssl._create_unverified_context()
                 req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}", 
                                            headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
@@ -1385,23 +1446,16 @@ class TerminalSession(QWidget):
                         cloud_app_ver = data.get('version', '1.0.0').strip()
                         if self.is_newer_version(cloud_app_ver, __version__):
                             updates_found = True
-                            info_msg += "\x1b[36;1m═══ Bootstrap Update Available ═══\x1b[0m\r\n"
-                            info_msg += f"\x1b[32;1m{bootstrap_cmd}\x1b[0m\r\n"
-                            info_msg += "\x1b[90mRun this command to update Velora from the latest repository\x1b[0m\r\n\r\n"
-        except:
-            pass  # Silently fail if update check fails
+                            self.insert_ansi_text(f"\r\n{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Bootstrap Update Available ═══{terminal_utils.RESET}\r\n")
+                            self.insert_ansi_text(f"{terminal_utils.GREEN}{bootstrap_cmd}{terminal_utils.RESET}\r\n")
+                            self.insert_ansi_text(f"{terminal_utils.GREY}Run this command to update Velora from the latest repository{terminal_utils.RESET}\r\n\r\n")
+        except: pass
         
         # Check for package updates
         pkg_updates = []
         try:
-            import vpm
             project_id, api_key = vpm.get_remote_credentials()
             if project_id and api_key:
-                import ssl
-                import urllib.request
-                import json
-                import time
-                
                 ctx = ssl._create_unverified_context()
                 req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
                                            headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
@@ -1426,27 +1480,23 @@ class TerminalSession(QWidget):
                                         local_ver = m.group(1).strip() if m else "1.0.0"
                                         if self.is_newer_version(cloud_ver, local_ver):
                                             pkg_updates.append(pkg)
-                                    except:
-                                        pass
+                                    except: pass
                         
                         if pkg_updates:
                             updates_found = True
-                            info_msg += "\x1b[36;1m═══ Package Updates Available ═══\x1b[0m\r\n"
+                            self.insert_ansi_text(f"{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Package Updates Available ═══{terminal_utils.RESET}\r\n")
                             for pkg in pkg_updates:
-                                info_msg += f"\x1b[32m• {pkg}\x1b[0m\r\n"
-                            info_msg += "\r\n\x1b[36mRun \x1b[32;1mvpm update-all\x1b[36m to update all packages\x1b[0m\r\n\r\n"
-        except:
-            pass  # Silently fail if package check fails
+                                self.insert_ansi_text(f"{terminal_utils.PINK}• {pkg}{terminal_utils.RESET}\r\n")
+                            self.insert_ansi_text(f"\r\n{terminal_utils.CYAN}Run {terminal_utils.GREEN}vpm update-all{terminal_utils.CYAN} to update all packages{terminal_utils.RESET}\r\n\r\n")
+        except: pass
         
-        # Only show update commands if updates were found
+        # Only show update summary if updates were found
         if updates_found:
-            info_msg += "\x1b[36;1m═══ Update Commands ═══\x1b[0m\r\n"
-            info_msg += "\x1b[32;1mvpm upgrade\x1b[0m         - Update the terminal application\r\n"
-            info_msg += "\x1b[32;1mvpm update-all\x1b[0m     - Update all installed packages\r\n"
-            info_msg += "\x1b[32;1mvpm list\x1b[0m            - Browse available packages\r\n"
-            info_msg += "\x1b[32;1mvpm info <package>\x1b[0m  - Get package details\r\n"
-            
-            self.insert_ansi_text(info_msg)
+            self.insert_ansi_text(f"{terminal_utils.BOLD}{terminal_utils.PURPLE}═══ Quick Update Commands ═══{terminal_utils.RESET}\r\n")
+            self.insert_ansi_text(f"{terminal_utils.GREEN}vpm upgrade{terminal_utils.RESET}         - Update the terminal application\r\n")
+            self.insert_ansi_text(f"{terminal_utils.GREEN}vpm update-all{terminal_utils.RESET}     - Update all installed packages\r\n")
+            self.insert_ansi_text(f"{terminal_utils.GREEN}vpm list{terminal_utils.RESET}            - Browse available packages\r\n")
+            self.insert_ansi_text("\r\n")
     
     def is_newer_version(self, cloud_ver, local_ver):
         """Check if cloud version is newer than local version"""
