@@ -559,8 +559,30 @@ def check_updates():
     app_update = None
     app_current = "1.0.0"
     pkg_updates = []
+    bootstrap_update = None
+    bootstrap_current = "1.0.0"
     
     try:
+        # Check bootstrap update
+        try:
+            req = urllib.request.Request("https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py", headers={'User-Agent': 'Velora-VPM'})
+            with urllib.request.urlopen(req, context=get_context(), timeout=5) as response:
+                content = response.read().decode('utf-8')
+                m = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+                if m:
+                    cloud_bootstrap_ver = m.group(1)
+                    # Get local bootstrap version
+                    local_bootstrap_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "bootstrap.py")
+                    if os.path.exists(local_bootstrap_path):
+                        with open(local_bootstrap_path, 'r', encoding='utf-8') as f:
+                            local_content = f.read()
+                            m2 = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', local_content, re.MULTILINE)
+                            if m2: bootstrap_current = m2.group(1)
+                    try:
+                        if [int(x) for x in cloud_bootstrap_ver.split('.')] > [int(x) for x in bootstrap_current.split('.')]: bootstrap_update = cloud_bootstrap_ver
+                    except Exception:
+                        if cloud_bootstrap_ver != bootstrap_current: bootstrap_update = cloud_bootstrap_ver
+        except Exception: pass
         project_id, _ = get_remote_credentials()
         req = get_request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}")
         with urllib.request.urlopen(req, context=get_context(), timeout=5) as response:
@@ -610,6 +632,13 @@ def check_updates():
             print("  \x1b[33m🔔 Run \x1b[32;1mvpm upgrade\x1b[33m to install the new version.\x1b[0m")
         else:
             print(f"  \x1b[32;1m✅ Up to date\x1b[0m \x1b[90m(v{app_current})\x1b[0m")
+
+        print("\n\x1b[36;1m=== 🚀 Bootstrap Status ===\x1b[0m")
+        if bootstrap_update:
+            print(f"  \x1b[31;1mOutdated\x1b[0m \x1b[90m(v{bootstrap_current} ->\x1b[0m \x1b[32;1mv{bootstrap_update}\x1b[0m)")
+            print("  \x1b[33m🔔 Re-run the bootstrap installer to update.\x1b[0m")
+        else:
+            print(f"  \x1b[32;1m✅ Up to date\x1b[0m \x1b[90m(v{bootstrap_current})\x1b[0m")
 
         print("\n\x1b[36;1m=== 📦 Upgradable Packages ===\x1b[0m")
         if pkg_updates:

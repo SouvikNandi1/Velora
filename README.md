@@ -63,7 +63,7 @@ Velora uses its own package manager to keep your environment lightweight. By def
 | `vpm list` | View all available packages in the Velora Cloud. |
 | `vpm install all` | **Recommended.** Installs the entire official verified suite. |
 | `vpm info <pkg>` | View detailed metadata and description for a package. |
-| `vpm check` | Check for updates for the terminal and your tools. |
+| `vpm check` | Check for updates for the terminal, bootstrap installer, and your tools. |
 | `vpm upgrade` | Perform an over-the-air update of the main Terminal app. |
 
 ---
