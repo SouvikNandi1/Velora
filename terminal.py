@@ -1,4 +1,4 @@
-__version__ = "1.83.0"
+__version__ = "1.83.1"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -1182,10 +1182,28 @@ class TerminalSession(QWidget):
             self.run_control_sequence("\r")
             return
 
+        # vpm local — show only installed packages
+        if cmd_strip == "vpm local":
+            self.render_vpm_local()
+            self.run_control_sequence("\r")
+            return
+
+        # vpm search <query>
+        if cmd_strip.startswith("vpm search "):
+            self.render_vpm_search(cmd_strip[11:].strip())
+            self.run_control_sequence("\r")
+            return
+
         # Power-Up: Detailed Package Info Interceptor
         if cmd_strip.startswith("vpm info "):
             pkg_name = cmd_strip[9:].strip()
             self.render_vpm_info(pkg_name)
+            self.run_control_sequence("\r")
+            return
+
+        # velora — system dashboard
+        if cmd_strip == "velora":
+            self.render_velora_dashboard()
             self.run_control_sequence("\r")
             return
 
@@ -1195,8 +1213,6 @@ class TerminalSession(QWidget):
             self.insert_ansi_text("\x1b[36mTo update this standalone executable:\x1b[0m\r\n")
             self.insert_ansi_text(f"\x1b[36m1. Run \x1b[32;1mvpm build\x1b[36m if you have the source code.\x1b[0m\r\n")
             self.insert_ansi_text(f"\x1b[36m2. Download the latest release from: \x1b[32;1m{__website__}/releases\x1b[0m\r\n\n")
-            
-            # Trigger the standard prompt so the user isn't stuck
             self.run_control_sequence("\r")
             return
 
@@ -1225,91 +1241,208 @@ class TerminalSession(QWidget):
             self.insert_ansi_text(f"\x1b[31;1mError:\x1b[0m Could not sync registry: {e}\r\n")
             return False
 
-    def render_vpm_list(self):
+    def _vpm_load_cache(self):
+        """Load the VPM cache, syncing if missing. Returns dict or None."""
         cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
         if not os.path.exists(cache_path):
             if not self.sync_registry():
-                return
-
+                return None
         try:
             with open(cache_path, 'r') as f:
-                cloud_data = json.load(f)
-        except:
-            self.insert_ansi_text("\r\n\x1b[31;1mError:\x1b[0m Could not parse the package registry cache.\r\n")
+                return json.load(f)
+        except Exception:
+            self.insert_ansi_text("\r\n\x1b[31;1mError:\x1b[0m Could not parse registry cache.\r\n")
+            return None
+
+    def _vpm_is_installed(self, pkg):
+        return os.path.exists(os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py"))
+
+    def _vpm_local_ver(self, pkg):
+        """Return locally installed version string or None."""
+        path = os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py")
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+            return m.group(1).strip() if m else '?'
+        except Exception:
+            return '?'
+
+    def render_vpm_list(self):
+        cloud_data = self._vpm_load_cache()
+        if cloud_data is None:
             return
 
-        user_core_dir = os.path.expanduser("~/.velora/core")
-        official = []
-        community = []
-
+        official, community = [], []
         for pkg, info in cloud_data.items():
             if not isinstance(info, dict): continue
-            if "✅" in info.get('description', ''):
+            if '✅' in info.get('description', ''):
                 official.append((pkg, info))
             else:
                 community.append((pkg, info))
-
         official.sort()
         community.sort()
 
-        self.insert_ansi_text("\r\n\x1b[38;5;51m\x1b[1m⚡ VELORA CLOUD REGISTRY \x1b[0m\x1b[90m(Package Manager)\x1b[0m\r\n\n")
+        installed_count = sum(1 for p, _ in official + community if self._vpm_is_installed(p))
+        W = 74
 
-        def render_section(title, items, pkg_color, icon=""):
-            self.insert_ansi_text(f" \x1b[1m{icon} {title}\x1b[0m\r\n")
-            self.insert_ansi_text(f" \x1b[90m" + "─" * 75 + "\x1b[0m\r\n")
+        out = []
+        out.append(f"\r\n\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        out.append(f"  \x1b[38;5;51;1m⚡ VELORA PACKAGE MANAGER\x1b[0m  "
+                   f"\x1b[90m{len(cloud_data)} packages  │  "
+                   f"\x1b[32m{installed_count} installed\x1b[0m\r\n")
+        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n\n")
+
+        def render_section(title, items, col, icon):
+            out.append(f"  {col}{icon} {title}\x1b[0m\r\n")
+            out.append(f"  \x1b[90m{'─'*70}\x1b[0m\r\n")
+            hdr = (f"  \x1b[90m{'PACKAGE':<16}{'VERSION':<10}"
+                   f"{'LOCAL':<10}{'STATUS':<13}AUTHOR\x1b[0m\r\n")
+            out.append(hdr)
             for pkg, info in items:
-                version = info.get('version', '1.0.0')
-                author = info.get('author', 'Unknown')
-                desc = info.get('description', '').replace('✅', '').strip()
-                desc = (desc[:60] + '..') if len(desc) > 60 else desc
-                is_installed = os.path.exists(os.path.join(user_core_dir, f"{pkg}.py"))
-                
-                status_badge = "\x1b[42;30m INSTALLED \x1b[0m" if is_installed else "\x1b[100;37m AVAILABLE \x1b[0m"
-                
-                self.insert_ansi_text(f" {pkg_color}◆ {pkg:<15}\x1b[0m \x1b[90mv{version:<8}\x1b[0m {status_badge} \x1b[90mby\x1b[0m \x1b[33m{author[:18]:<18}\x1b[0m\r\n")
-                self.insert_ansi_text(f"   \x1b[97m{desc}\x1b[0m\r\n\n")
+                ver     = info.get('version', '?')
+                author  = info.get('author', '?')[:18]
+                installed = self._vpm_is_installed(pkg)
+                lver    = self._vpm_local_ver(pkg) if installed else '—'
+                badge   = "\x1b[42;30;1m INSTALLED \x1b[0m" if installed else "\x1b[100;37m AVAILABLE \x1b[0m"
+                # version mismatch highlight
+                lver_col = ("\x1b[33m" if lver not in ('—','?') and lver != ver else "\x1b[90m")
+                out.append(
+                    f"  {col}◆ {pkg:<14}\x1b[0m "
+                    f"\x1b[36mv{ver:<9}\x1b[0m "
+                    f"{lver_col}{lver:<9}\x1b[0m "
+                    f"{badge} \x1b[33m{author}\x1b[0m\r\n"
+                )
+            out.append("\r\n")
 
         if official:
-            render_section("Verified Official Suite", official, "\x1b[36;1m", "🛡️")
-        
+            render_section("Verified Official Suite", official, "\x1b[36;1m", "🛡️ ")
         if community:
             render_section("Community Registry", community, "\x1b[32;1m", "🌍")
 
-        self.insert_ansi_text(f"\x1b[90m Total: {len(cloud_data)} packages  │  Use 'vpm info <pkg>' for details\x1b[0m\r\n")
+        out.append(f"\x1b[90m  Tip: vpm info <pkg> │ vpm local │ vpm search <query> │ vpm install <pkg>\x1b[0m\r\n")
+        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        self.insert_ansi_text("".join(out))
 
-    def render_vpm_info(self, pkg_name):
-        cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
-        if not os.path.exists(cache_path):
-            if not self.sync_registry():
-                return
-
-        try:
-            with open(cache_path, 'r') as f:
-                data = json.load(f)
-        except: return
-
-        if pkg_name not in data:
-            self.insert_ansi_text(f"\r\n\x1b[31;1mError:\x1b[0m Package '{pkg_name}' not found in registry.\r\n")
+    def render_vpm_local(self):
+        """Show only locally installed packages with version info."""
+        cloud_data = self._vpm_load_cache() or {}
+        user_core  = os.path.expanduser("~/.velora/core")
+        if not os.path.isdir(user_core):
+            self.insert_ansi_text("\r\n\x1b[33mNo packages installed yet.\x1b[0m\r\n")
             return
 
-        info = data[pkg_name]
-        self.insert_ansi_text(f"\r\n\x1b[38;5;51m\x1b[1m📦 {pkg_name.upper()} \x1b[0m\x1b[90mv{info.get('version', '1.0.0')}\x1b[0m\r\n")
-        self.insert_ansi_text(f" \x1b[90m" + "═" * 60 + "\x1b[0m\r\n")
-        
-        self.insert_ansi_text(f" \x1b[36mAuthor:\x1b[0m      \x1b[97m{info.get('author', 'Anonymous')}\x1b[0m\r\n")
-        
+        installed = []
+        for f in sorted(os.listdir(user_core)):
+            if not f.endswith('.py'): continue
+            pkg  = f[:-3]
+            lver = self._vpm_local_ver(pkg) or '?'
+            cver = cloud_data.get(pkg, {}).get('version', '?') if isinstance(cloud_data.get(pkg), dict) else '?'
+            upd  = self.is_newer_version(cver, lver) if cver != '?' and lver != '?' else False
+            installed.append((pkg, lver, cver, upd))
+
+        W = 60
+        out = []
+        out.append(f"\r\n\x1b[32;1m{'━'*W}\x1b[0m\r\n")
+        out.append(f"  \x1b[32;1m📦 INSTALLED PACKAGES  \x1b[90m({len(installed)} total)\x1b[0m\r\n")
+        out.append(f"\x1b[32;1m{'━'*W}\x1b[0m\r\n")
+        out.append(f"  \x1b[90m{'PACKAGE':<18}{'LOCAL':<12}{'CLOUD':<12}STATUS\x1b[0m\r\n")
+        out.append(f"  \x1b[90m{'─'*56}\x1b[0m\r\n")
+        for pkg, lv, cv, upd in installed:
+            status = "\x1b[33m⬆  update\x1b[0m" if upd else "\x1b[32m✔  latest\x1b[0m"
+            out.append(f"  \x1b[36m◆ {pkg:<16}\x1b[0m \x1b[97mv{lv:<11}\x1b[0m \x1b[90mv{cv:<11}\x1b[0m {status}\r\n")
+        out.append(f"\x1b[32;1m{'━'*W}\x1b[0m\r\n")
+        self.insert_ansi_text("".join(out))
+
+    def render_vpm_search(self, query):
+        """Search the registry by package name or description."""
+        cloud_data = self._vpm_load_cache()
+        if cloud_data is None or not query:
+            return
+        q = query.lower()
+        matches = [(pkg, info) for pkg, info in cloud_data.items()
+                   if isinstance(info, dict) and
+                   (q in pkg.lower() or q in info.get('description','').lower())]
+        matches.sort()
+
+        out = []
+        out.append(f"\r\n\x1b[35;1m🔍 Search: \"{query}\" — {len(matches)} result(s)\x1b[0m\r\n")
+        out.append(f"  \x1b[90m{'─'*70}\x1b[0m\r\n")
+        if not matches:
+            out.append("  \x1b[90mNo packages matched your query.\x1b[0m\r\n")
+        for pkg, info in matches:
+            ver     = info.get('version','?')
+            desc    = info.get('description','').replace('✅','').strip()
+            desc    = desc[:65]+'..' if len(desc)>65 else desc
+            installed = self._vpm_is_installed(pkg)
+            badge   = "\x1b[42;30m INSTALLED \x1b[0m" if installed else "\x1b[100;37m AVAILABLE \x1b[0m"
+            out.append(f"  \x1b[35;1m◆ {pkg:<16}\x1b[0m \x1b[36mv{ver}\x1b[0m  {badge}\r\n")
+            out.append(f"    \x1b[90m{desc}\x1b[0m\r\n")
+        out.append(f"  \x1b[90m{'─'*70}\x1b[0m\r\n")
+        self.insert_ansi_text("".join(out))
+
+    def render_vpm_info(self, pkg_name):
+        cloud_data = self._vpm_load_cache()
+        if cloud_data is None: return
+        if pkg_name not in cloud_data:
+            self.insert_ansi_text(f"\r\n\x1b[31;1mError:\x1b[0m Package '{pkg_name}' not found.\r\n")
+            return
+        info = cloud_data[pkg_name]
+        ver   = info.get('version','?')
+        lver  = self._vpm_local_ver(pkg_name)
+        installed = self._vpm_is_installed(pkg_name)
+        desc  = info.get('description','No description.').replace('✅','').strip()
+        W = 62
+        out = []
+        out.append(f"\r\n\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        out.append(f"  \x1b[38;5;51;1m📦 {pkg_name.upper()}\x1b[0m  \x1b[90mv{ver}\x1b[0m\r\n")
+        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        out.append(f"  \x1b[36mAuthor\x1b[0m      {info.get('author','?')}\r\n")
         if info.get('website'):
-            self.insert_ansi_text(f" \x1b[36mWebsite:\x1b[0m     \x1b[34;4m{info.get('website')}\x1b[0m\r\n")
-            
-        desc = info.get('description', 'No description provided.').replace('✅', '').strip()
-        self.insert_ansi_text(f" \x1b[36mDescription:\x1b[0m \x1b[97m{desc}\x1b[0m\r\n")
-        
-        self.insert_ansi_text(f" \x1b[90m" + "─" * 60 + "\x1b[0m\r\n")
-        is_installed = os.path.exists(os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg_name}.py"))
-        if is_installed:
-            self.insert_ansi_text(f" \x1b[42;30m\x1b[1m INSTALLED \x1b[0m  \x1b[32mReady to use\x1b[0m\r\n\n")
+            out.append(f"  \x1b[36mWebsite\x1b[0m     \x1b[34;4m{info['website']}\x1b[0m\r\n")
+        out.append(f"  \x1b[36mCloud ver\x1b[0m   v{ver}\r\n")
+        if installed:
+            upd = self.is_newer_version(ver, lver) if lver else False
+            out.append(f"  \x1b[36mLocal ver\x1b[0m   "
+                       f"\x1b[{'33' if upd else '32'}mv{lver}\x1b[0m"
+                       f"{' \x1b[33m(update available)\x1b[0m' if upd else ''}\r\n")
+        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
+        out.append(f"  \x1b[97m{desc}\x1b[0m\r\n")
+        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
+        if installed:
+            out.append(f"  \x1b[42;30;1m INSTALLED \x1b[0m  \x1b[32mReady to use  ·  "
+                       f"\x1b[90mRemove: vpm remove {pkg_name}\x1b[0m\r\n")
         else:
-            self.insert_ansi_text(f" \x1b[100;37m AVAILABLE \x1b[0m  \x1b[90mInstall with: \x1b[33mvpm install {pkg_name}\x1b[0m\r\n\n")
+            out.append(f"  \x1b[100;37m AVAILABLE \x1b[0m  "
+                       f"\x1b[90mInstall: \x1b[33mvpm install {pkg_name}\x1b[0m\r\n")
+        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        self.insert_ansi_text("".join(out))
+
+    def render_velora_dashboard(self):
+        """Show a compact Velora system dashboard."""
+        import datetime
+        cloud_data = self._vpm_load_cache() or {}
+        user_core  = os.path.expanduser("~/.velora/core")
+        installed_count = sum(1 for f in os.listdir(user_core) if f.endswith('.py')) if os.path.isdir(user_core) else 0
+        W = 62
+        now = datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
+        out = []
+        out.append(f"\r\n\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        out.append(f"  \x1b[38;5;51;1m⚡ VELORA TERMINAL\x1b[0m  \x1b[90mv{__version__}\x1b[0m\r\n")
+        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        out.append(f"  \x1b[36mPlatform\x1b[0m     \x1b[97m{platform.system()} {platform.release()}\x1b[0m\r\n")
+        out.append(f"  \x1b[36mArch\x1b[0m         \x1b[97m{platform.machine()}\x1b[0m\r\n")
+        out.append(f"  \x1b[36mPython\x1b[0m       \x1b[97m{sys.version.split()[0]}\x1b[0m\r\n")
+        out.append(f"  \x1b[36mTime\x1b[0m         \x1b[97m{now}\x1b[0m\r\n")
+        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
+        out.append(f"  \x1b[36mPackages\x1b[0m     \x1b[32m{installed_count} installed\x1b[0m  \x1b[90m/ {len(cloud_data)} in registry\x1b[0m\r\n")
+        out.append(f"  \x1b[36mCore dir\x1b[0m     \x1b[90m{user_core}\x1b[0m\r\n")
+        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
+        out.append(f"  \x1b[90mvpm list  │  vpm local  │  vpm search <q>  │  velora --help\x1b[0m\r\n")
+        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
+        self.insert_ansi_text("".join(out))
 
     def toggle_search(self):
         if self.search_bar.isVisible():
