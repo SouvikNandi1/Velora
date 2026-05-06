@@ -1,0 +1,779 @@
+v1.0.0
+- Initial working prototype of PyQt6 Powerful Terminal.
+
+v1.1.0
+- Added terminal search functionality (Ctrl+F) to easily locate text in the buffer.
+- Added a Status Bar to track application state and font size changes dynamically.
+
+v1.1.1
+- Improved Context Menu design with proper styling to match the dark theme.
+- Fixed Context Menu bugs: "Copy" and "Paste" actions are now contextually enabled/disabled based on text selection and clipboard content respectively.
+
+v1.2.0
+- Added a Settings Dialog to customize terminal preferences.
+- Implemented persistent settings (QSettings) for Font Family and Font Size.
+- Added a Settings option to the right-click context menu.
+
+v1.2.1
+- Fixed a bug where the Settings Dialog crashed on launch by updating `QFontDatabase.systemFontFamilies()` to the correct PyQt6 `QFontDatabase.families()` method.
+
+v1.3.0
+- Added multi-tab support with `QTabWidget`, enabling multiple simultaneous terminal sessions.
+- Implemented a dynamic Theme Engine with presets including Dracula, Solarized Light, and Hacker.
+- Refactored core logic into a new `TerminalSession` component for modularity.
+- Added global shortcuts `Ctrl+T` to open a new tab and `Ctrl+W` to close the current tab.
+
+v1.3.1
+- Fixed an import error causing the app to crash on launch by moving `QShortcut` to the correct `PyQt6.QtGui` module.
+
+v1.3.2
+- Fixed a bug where `Ctrl+T` and `Ctrl+W` shortcuts were silently ignored due to Python Garbage Collection.
+- Added `Ctrl+Tab` and `Ctrl+Shift+Tab` shortcuts for cycling forward and backward through open tabs.
+
+v1.3.3
+- Enforced `ApplicationShortcut` context for all tab navigation shortcuts (`Ctrl+T`, `Ctrl+W`, etc.). This guarantees the shortcuts will trigger globally, preventing child text-edit widgets from accidentally swallowing the keystrokes.
+
+v1.3.4
+- Redesigned the Tab Bar UI to feature rounded corners, depth elevation for active tabs, and interactive hover states.
+
+v1.3.5
+- Fixed an OS-level issue where pressing `Ctrl+T` suspended the application (`[1]+ Stopped`). Resolved by ignoring `SIGTTOU`/`SIGTTIN` signals and disabling bash job control (`+m`) to prevent background terminal hijacking.
+
+v1.3.6
+- Tabs now close cleanly and automatically when the underlying shell session exits (e.g., when typing `exit` or pressing `Ctrl+D`).
+- Added a "+" button to the top right corner of the tab bar for easily opening new tabs with the mouse.
+
+v1.3.7
+- Restored missing tab lifecycle features (clean close and "+" button).
+- Fixed a visual bug where new tabs would get duplicate names (e.g., multiple "Terminal 2" tabs) by implementing a robust tab counter.
+
+v1.3.8
+- Fixed a critical bug where new tabs lacked essential OS environment variables (like `$PATH` and `$HOME`) due to an empty environment spawn. This caused commands to fail ("command not found") in newly created tabs.
+- Fixed a PyQt6 `TypeError` when closing tabs by correctly passing `exit_code` and `exit_status` through the `QProcess.finished` lambda.
+- Hardened tab navigation signals with `*args` to safely drop unexpected arguments from button clicks and shortcuts.
+
+v1.3.9
+- Resolved the persistent "new tab freezing" issue by spawning child shells inside a true Pseudo-Terminal (PTY) using Python's `pty` module.
+- This completely isolates each tab's shell from the parent's TTY, guaranteeing interactive prompts and physically preventing all OS-level background suspension (`SIGTTOU`/`SIGTTIN`) conflicts.
+
+v1.3.10
+- Fixed an issue where bracketed paste mode sequences (`\x1b[?2004h` and `\x1b[?2004l`) visibly bled into the terminal prompt. 
+- Updated the ANSI CSI regex parser to correctly identify and strip DEC Private Mode escape sequences containing the `?` character.
+
+v1.3.11
+- Fixed a `RuntimeError` causing crashes when manually closing tabs.
+- Replaced a lambda function with a bound method for the `QProcess.finished` signal to prevent memory access errors on deleted C++ objects.
+
+v1.3.12
+- Fixed an `AttributeError` crash (`'NoneType' object has no attribute 'process'`) occurring during application shutdown.
+- Added safety null-checks to the `closeEvent` and `close_tab` methods to verify widgets exist before attempting to terminate their background shell processes.
+
+v1.4.0
+- Added persistent command history, which is now loaded from and saved to `~/.uniterminal_history` across all sessions.
+- Implemented a right-click context menu on tabs, allowing users to rename, close, or close other tabs.
+
+v1.5.0
+- Replaced the modal Settings dialog with a dedicated `SettingsTab`, so preferences now open in a non-blocking tab alongside terminal sessions.
+- Integrated an extensive suite of new terminal color schemes inspired by the popular iTerm2-Color-Schemes repository (including Nord, Tokyo Night, Monokai Pro, Gruvbox, Ayu, and more).
+
+v1.5.1
+- Fixed an `AttributeError` crash when opening the Settings tab.
+- Corrected layout assignments to use `QFormLayout` for UI inputs instead of the parent `QVBoxLayout`.
+
+v1.5.2
+- Expanded the theme selection by adding more popular color schemes sourced from the iTerm2-Color-Schemes repository.
+- New themes include: Catppuccin Mocha, Night Owl, One Dark, SynthWave '84, Tomorrow Night, and Zenburn.
+
+v1.5.3
+- Added a background opacity/transparency slider to the Settings tab, enabling a see-through window effect.
+- Refactored the theme engine to support RGBA colors for window transparency.
+
+v1.5.4
+- Fixed a stylesheet bug where the translucent background was compounding/stacking on child widgets, causing the terminal to appear fully opaque on launch.
+- Scoped background opacity directly to the `TerminalSession` and `SettingsTab` components, added `WA_StyledBackground`, and explicitly made `QTabWidget::pane` transparent.
+
+v1.6.0
+- Implemented an intelligent autocomplete popup using `QCompleter` that suggests commands based on `.uniterminal_history` as you type.
+- Suggestions are prioritized by most recent usage and seamlessly styled to match the active theme and font preferences.
+
+v1.6.1
+- Upgraded autocomplete from a popup menu to an inline "ghost text" style suggestion, similar to modern shells like `fish` or `zsh`.
+- Autocomplete can now be accepted using the `Tab` or `Right Arrow` keys. Unaccepted suggestions are safely ignored when pressing `Enter`.
+- Cleaned up dead popup rendering and styling code.
+
+v1.6.2
+- Fixed a UI bug where the tab bar and status bar were completely invisible (0% opacity) instead of matching the translucent theme.
+- Re-anchored the RGBA background opacity to the root `QMainWindow` and set child components to `transparent` to ensure a uniform, non-compounding glass effect.
+
+v1.6.3
+- Fixed the transparency issue where the terminal would appear fully opaque or black on some operating systems.
+- Reverted `QMainWindow` to `transparent` and moved the RGBA background layer to a named central widget (`#MainTabs`) and the `QStatusBar` to properly composite alpha channels.
+
+v1.6.4
+- Fixed a bug where the opacity slider only applied to the status bar and not the main terminal area.
+- Wrapped the `QTabWidget` in a stylized central container (`#MainContainer`) to ensure the alpha transparency correctly fills the entire application window.
+
+v1.7.0
+- Added a multi-line paste warning dialogue. Pasting multiple lines now triggers a confirmation prompt to prevent accidental execution of large scripts.
+- Implemented a Fullscreen toggle shortcut (`F11`) to maximize the terminal workspace.
+
+v1.8.0
+- Added a "Clear Command History" button to the Settings tab.
+- Truncates the `~/.uniterminal_history` file and signals all active terminal tabs to instantly flush their in-memory history and autocomplete buffers without needing to restart the application.
+
+v1.8.1
+- Fixed a bug where the `clear` command occasionally failed to completely wipe the screen on some Unix configurations.
+- Upgraded the ANSI CSI parser to accurately interpret additional clear sequences (`0J`, `1J`, `3J`) and the RIS (Reset to Initial State) sequence `\x1bc`.
+
+v1.8.2
+- Fixed the "multiple popups" issue occurring in several areas of the application.
+- Blocked auto-repeat on the `Ctrl+V` shortcut to prevent a flood of confirmation dialogs when long-pressing paste.
+- Removed the redundant success popup after clearing history to streamline the UX.
+- Properly enforced the Inline Autocomplete ("ghost text") fix, removing the buggy popup list that was repeatedly stealing focus or flickering on every keystroke.
+
+v1.8.3
+- Fixed a recursive loop bug where the "Clear History" confirmation popup would appear multiple times.
+- Resolved a method naming collision between `SettingsTab` and `TerminalSession` components.
+- Hardened the `clear_all_history` broadcast to exclusively target terminal sessions.
+
+v1.9.0
+- Implemented split-screen terminal views! You can now right-click a tab and choose to "Split Side-by-Side" or "Split Top-to-Bottom".
+- Wrapped terminal sessions in a custom `TerminalSplitter` to manage multiple panes efficiently inside a single tab.
+- Updated Tab context menu and app lifecycle events to gracefully handle multi-pane initialization and termination.
+- Splitter handles are dynamically styled to match the currently selected application theme border.
+
+v1.9.1
+- Added a custom background image (`src/velora.png`) to the `blueprint.html` architecture documentation.
+- Applied CSS properties like `background-size` and `background-blend-mode` to ensure the document remains readable.
+
+v1.9.2
+- Expanded `blueprint.html` to include a deep-dive "Key Architectural Decisions & Good Design Practices" section.
+- Upgraded the HTML styling with a modern "glassmorphism" aesthetic (`backdrop-filter: blur`), card layouts, and improved typography to reflect the application's premium feel.
+
+v1.9.3
+- Redesigned the `blueprint.html` layout to include a navigation sidebar for improved readability and easier access to architectural sections.
+- Updated the blueprint's CSS to ensure the background image (`velora.png`) renders correctly and consistently.
+
+v1.9.4
+- Optimized `blueprint.html` for both mobile phones and PCs.
+- Added responsive CSS media queries to stack the sidebar vertically on smaller screens and adjusted padding for better readability on mobile devices.
+
+v1.9.5
+- Improved PC layout compatibility for `blueprint.html` by widening the maximum layout width.
+- Fixed cramped sidebar styling on desktop monitors by expanding `max-width` to `1200px` and ensuring full viewport height coverage.
+
+v1.10.0
+- Implemented clickable hyperlinks! Holding `Ctrl` while hovering over a URL in the terminal turns the cursor into a pointer, and clicking it opens the link in your default web browser.
+- Added Drag and Drop support. You can now drop files or folders directly onto the terminal to automatically paste their absolute, safely-quoted paths into the command prompt.
+
+v1.10.1
+- Optimized `blueprint.html` UI codebase by introducing CSS Variables for a maintainable, centralized color theme.
+- Added `position: sticky` to the sidebar so navigation links float nicely as the user reads down the page.
+- Enabled native smooth scrolling for elegant transitions when clicking anchor links.
+
+v1.10.2
+- Expanded `blueprint.html` layout width to `1400px` for better utilization of wide PC monitors.
+- Optimized document typography rendering for sharper, cleaner text on high-resolution displays.
+- Implemented custom WebKit scrollbars styled to perfectly match the dark glassmorphism theme.
+
+v1.11.0
+- Enhanced `blueprint.html` to directly communicate with the codebase by embedding interactive, collapsible code snippets (`<details>`).
+- Developers can now view core class signatures, PyQt signals, and critical implementation logic directly alongside the architectural descriptions.
+- Improved valid HTML structure by migrating `.card` CSS classes from lists directly to wrapping `div` containers.
+
+v1.11.1
+- Supercharged `blueprint.html` by integrating Mermaid.js for dynamic, interactive UML Architecture and Sequence Data Flow diagrams.
+- Added Highlight.js for automatic Python syntax highlighting within the codebase snippet panels (styled to match the application's Dracula aesthetic).
+
+v1.11.2
+- Expanded `blueprint.html` layout width to `1600px` and widened the sidebar to `280px` to better utilize ultra-wide monitors.
+- Optimized rendering performance by applying the CSS `content-visibility: auto;` property to documentation cards, reducing layout and paint times for off-screen content.
+
+v1.11.3
+- Pushed `blueprint.html` maximum width to `1800px` and sidebar width to `300px` for ultimate ultra-wide monitor support.
+- Optimized rendering by adding a global `box-sizing: border-box` rule.
+- Added a `contain-intrinsic-size` property to cards, preventing scrollbar jitter during `content-visibility` lazy rendering.
+
+v1.12.0
+- Integrated the `velora.png` background image directly into the main terminal application.
+- Used CSS `border-image` scaling on the root `QMainWindow` to ensure the background stretches dynamically, harmonizing with the opacity slider to produce a stunning glassmorphism overlay.
+
+v1.12.1
+- Fixed an issue where the background image failed to display on some platforms by safely formatting the path using `QUrl.fromLocalFile()`.
+- Targeted `#MainWindow` explicitly in the stylesheet and lowered the default background opacity to 85% to ensure the image isn't obscured by a completely solid color layer.
+
+v1.13.0
+- Implemented dynamic ScrollSpy in `blueprint.html`. The sidebar now actively highlights the current section as the user scrolls.
+- Added an interactive "Copy" button to all Python code snippets in the documentation for rapid clipboard usage.
+- Optimized initial page load by adding the `defer` attribute to heavy external scripts (Mermaid.js, Highlight.js) and executing them securely after DOM load.
+
+v1.14.0
+- Renamed the application to Velora.
+- Updated the window title, settings organization, and history file (`~/.velora_history`) to reflect the new app name.
+- Updated the blueprint documentation titles and references.
+
+v1.15.0
+- Implemented Raw Terminal Mode (VT100 emulation) to fully support interactive fullscreen CLI applications like `nano`, `vim`, and `htop`.
+- Automatically parses ANSI absolute/relative cursor positioning and toggles Raw Mode via Alternate Screen Buffer sequences (`?1049h`).
+- Added File Path Tab Autocompletion! Pressing `Tab` at the prompt will now intelligently auto-complete local file and directory paths based on the context.
+- Accurately tracks `cd` commands in the background to ensure path autocomplete context stays perfectly synced with the bash shell's current working directory.
+
+v1.15.1
+- Fixed a rendering artifact in fullscreen apps like `nano` where G0/G1 character set designations (like `\x1b(B`) and keypad modes were printed as raw escape sequences.
+- Enhanced the ANSI parser to safely intercept and strip unsupported non-CSI escape sequences.
+
+v1.15.2
+- Fixed an issue where `nano` lines were incorrectly merged due to overly aggressive overwrite mechanics in Raw Mode deleting newline characters. Backspaces (`\b`) also now strictly respect line boundaries.
+- Added ANSI Inverse Color (Reverse Video) support (`\x1b[7m` and `\x1b[27m`) so that `nano`'s bottom menu and shortcuts highlight perfectly.
+
+v1.15.3
+- Fixed persistent `nano` text jumbling and menu overlapping bugs by splitting the text insertion engine into two optimized modes: fast bulk-insert for normal terminals, and a strict character-by-character grid painter for Raw Mode.
+- The terminal now dynamically disables visual word wrapping (toggling `NoWrap`) whenever a fullscreen app is launched, protecting the absolute X/Y coordinate grid from corruption.
+- Added ANSI Default Color reset codes (`39` and `49`) to ensure `nano` can reset its highlights and backgrounds seamlessly.
+
+v1.15.4
+- Resolved missing functionality in `nano` where control shortcuts (like `Ctrl+W` for Search or `Ctrl+\` for Replace) were either swallowed by the terminal's global tabs or incorrectly parsed. 
+- Implemented precise ASCII control character mapping for all `Ctrl+` combinations (`\x00` to `\x1f`) while in Raw Mode, ensuring every single `nano` option is perfectly available and responsive.
+
+v1.15.5
+- Expanded ANSI escape code support to include `G` (Horizontal Absolute), `d` (Vertical Absolute), `X` (Erase Character), `L` (Insert Line), and `M` (Delete Line) required by modern `ncurses` applications.
+- Fixed a major Raw Mode grid calculation bug where `\n` line feeds were improperly resetting the cursor to column 0. It now correctly moves vertically while maintaining the horizontal column, preserving perfect alignment.
+- Added support for legacy Alternate Screen Buffer sequences (`?1047h` / `?47h`) to guarantee maximum compatibility with various fullscreen CLI tools.
+
+v1.16.0
+- Added dynamic window resizing! The terminal now calculates the textual grid (rows/columns) during window resizes and font zooming, passing it to the background PTY.
+- Replaced `pty.spawn` with an advanced custom Python proxy engine that intercepts secret OSC escape sequences (`\x1b]999;`) to instantly fire `TIOCSWINSZ` ioctl commands.
+- Fullscreen interactive apps like `nano`, `vim`, and `htop` will now automatically stretch, shrink, and perfectly reposition their content matrices dynamically when the window size changes.
+
+v1.17.0
+- Executed a complete Modern UI/UX Overhaul for a premium aesthetic.
+- Tabs are now rendered as sleek, borderless, floating "pills" with subtle hover interactions.
+- Removed harsh borders around the tab panes and status bar, relying on cleaner translucent dividers.
+- Enhanced the terminal area and settings page with comfortable internal padding, rounded Mac-style scrollbars (removing legacy scroll arrows), and modernized input forms.
+
+v1.18.0
+- Added a traditional animated blinking block cursor.
+- The cursor width now dynamically calculates and adjusts to the exact character width of the current font and zoom level.
+
+v1.18.1
+- Fixed a bug where pressing `Ctrl+C` while typing a command caused the unsubmitted text to duplicate and overlap with the new prompt (`^C`).
+- Unsubmitted text is now cleanly aborted and preserved in the display buffer without ghosting over the next command prompt.
+
+v1.18.2
+- Fixed an infinite text duplication loop caused by terminal redraws (`\r`) grabbing un-overwritten prompt text as user input.
+- `input_start_pos` now strictly anchors to the absolute end of the document, completely eliminating prompt ghosting when receiving chunked ANSI output.
+
+v1.18.3
+- Fixed `Ctrl+C` (`SIGINT`) and empty `Enter` text jumbling where prompts would overlap and accumulate `^C` characters endlessly at the end of the line.
+- Replaced all logical `StartOfLine`/`EndOfLine` operations with strict `StartOfBlock`/`EndOfBlock` movements. This perfectly resolves coordinate corruption caused by visual line wrapping in `QPlainTextEdit`.
+- Forced the terminal to drop to a fresh newline locally upon `Ctrl+C` execution to ensure aborted commands never share the same block as the subsequent redrawn shell prompt.
+
+v1.18.4
+- Fixed `Ctrl+C` "double-echo" and extra newline artifacts by removing manual local text insertion.
+- The terminal now correctly defers to the native PTY `termios` driver (ECHOCTL) to cleanly render the `^C` interrupt marker, guaranteeing perfect synchronization with the bash shell.
+
+v1.18.5
+- Fixed an issue where `Ctrl+C` caused an infinite accumulation of `^C` characters (e.g. `prompt$ ^C^C^C`).
+- Synchronized the normal-mode text engine with the advanced Raw Mode grid calculator. Newlines (`\n`) received after a carriage return (`\r`) now correctly move the cursor down vertically rather than splitting the active block, preventing overlapping prompts.
+
+v1.18.6
+- Fixed macOS default shell issue where `bash` was hardcoded. The terminal now dynamically reads and respects the user's default `$SHELL` environment variable (defaulting to `zsh` on macOS), eliminating the deprecated `bash` warning.
+
+v1.18.7
+- Fixed an issue on macOS where terminal tabs were incorrectly centered in the tab bar. Enforced left-alignment for all tabs across platforms.
+
+v1.18.8
+- Fixed `qt.qpa.fonts` warning on macOS by prioritizing "Menlo" as the default fallback monospace font instead of "Monospace".
+- Fixed `QTabBar` property warning by replacing invalid `qproperty-alignment` with standard `QTabWidget::tab-bar` left-alignment CSS.
+- Fixed `QProcess: Destroyed while process is still running` errors upon closing tabs by forcefully terminating (`.kill()`) hanging PTY threads if they fail to cleanly exit within 100ms.
+
+v1.18.9
+- Fixed a recursive event loop bug where manually closing a tab would trigger cascading signal chains (`waitForFinished` -> `finished` -> `session_closed`), resulting in the unintended closure of adjacent terminal tabs. Safely isolated shutdown sequences by dynamically disconnecting active signals before initiating PTY termination.
+
+v1.18.10
+- Fixed Mermaid architecture diagrams failing to render dimensions correctly by disabling `content-visibility` lazy rendering on `.card` components and preventing execution race conditions via explicit `mermaid.run()` initialization.
+- Fixed a visual bug in `blueprint.html` where the "Copy" buttons flew out of code blocks. Dynamically wrapped `<pre>` tags in positioned container divs to ensure absolute positioning anchors correctly and buttons remain visible during horizontal scrolling.
+
+v1.18.11
+- Fixed an issue in `blueprint.html` where the background image was obscured or failed to render. Separated CSS background shorthand properties into explicit declarations and applied `background-blend-mode: overlay` to ensure the image properly composites with the dark theme gradient.
+
+v1.18.12
+- Updated `blueprint.html` to include the `velora.png` background image as a circular logo element alongside the application name in the sidebar.
+
+v1.18.13
+- Fixed a visual bug in `blueprint.html` where the sidebar logo image was rendered transparent due to the `-webkit-background-clip: text` styling. Wrapped the Velora text in a `<span>` to isolate the gradient effect and ensure the image renders properly.
+
+v1.18.14
+- Set the application and window icons to `velora.png` so the image logo and application name ("Velora") are properly displayed in the OS taskbar, dock, and window title bar when the terminal is opened.
+
+v1.18.15
+- Added an ASCII art version of the Velora logo that prints in red (`\x1b[31;1m`) at the top of the terminal buffer whenever a new session is launched.
+
+v1.18.16
+- Fixed terminal "stair-stepping" rendering issues (where text drifted diagonally to the right) by preserving native `\r\n` Carriage Return sequences from the shell and applying them correctly in the text grid instead of stripping them.
+- Updated the ASCII Velora logo to use explicit `\r\n` terminators so it renders perfectly aligned to the left edge of the console.
+
+v1.19.0
+- Introduced the `core` folder for native, custom Velora terminal programs.
+- Added a command interception engine to seamlessly execute local Python scripts located in `core/` as standard shell commands (e.g., typing `fetch` automatically runs `core/fetch.py`).
+- Added `sysinfo` and `fetch` programs to showcase the new plugin system.
+
+v1.20.0
+- Expanded the `core` suite with three new native programs: `weather`, `roll`, and `todo`.
+- Built entirely using internal Python libraries to maintain an external dependency-free architecture.
+
+v1.20.1
+- Fixed an SSL certificate verification error in the `weather` core program that commonly occurs on macOS installations.
+- Handled via an unverified SSL context within `urllib` to ensure seamless execution without requiring users to manually install Python root certificates.
+
+v1.20.2
+- Fixed a bug where executing a custom `core` program (like `weather` or `fetch`) leaked the underlying absolute Python script path into the terminal output buffer.
+- Updated the `TerminalSession.run_command` logic so the `filter_echo` engine expects and strictly strips the dynamically constructed `sys.executable` string rather than the user's short-hand alias.
+
+v1.20.3
+- Fixed persistent path leaking when executing `core` programs. The underlying shell (`zsh`/`bash`) was forcefully inserting line-break sequences (`\r\n`) into the echoed string because the absolute Python path exceeded the terminal's column width, breaking the `filter_echo` regex match.
+- Resolved by exposing `$VELORA_PYTHON` and `$VELORA_CORE` environment variables directly to the shell's `QProcessEnvironment`, dramatically shortening the executed command string to inherently prevent shell line-wrapping.
+
+v1.20.4
+- Completely eradicated shell line-wrapping and echo leaking bugs for `core` programs.
+- Shifted architecture from brute-force string command rewriting to native executable wrappers. The terminal now dynamically generates shell scripts inside `~/.velora/bin` on startup and seamlessly injects this path directly into the PTY's `$PATH` environment variable.
+- `core` commands are now executed natively by the background shell, resulting in 100% perfect echo filtering and improved execution performance.
+
+v1.20.5
+- Fixed a `UnicodeEncodeError` in the `weather` core program on Windows (`'charmap' codec can't encode characters`).
+- Explicitly reconfigured the script's `sys.stdout` to use UTF-8 encoding so that weather condition emojis (like 🌫️, ☀️) are correctly forwarded to the terminal's rendering engine without crashing.
+
+v1.21.0
+- Added two new core programs: `calc` and `passgen`.
+- `calc` is a built-in terminal calculator that evaluates mathematical expressions securely.
+- `passgen` is a utility for generating secure, customizable random passwords right from the command line.
+
+v1.21.1
+- Updated the `fetch` core program to dynamically display an OS-specific ASCII logo (Apple for macOS, Windows logo for Windows, and Tux for Linux) instead of a static placeholder.
+
+v1.21.2
+- Enhanced the OS-specific ASCII art in the `fetch` core program with much larger, detailed, and visually powerful designs reminiscent of neofetch/fastfetch.
+- Centered the system information vertically alongside the new taller logos and added User and Python Version metrics for a more complete summary.
+
+v1.21.3
+- Updated the Windows ASCII art in the `fetch` core program to accurately reflect the official four-pane Microsoft logo colors (Red, Green, Blue, and Yellow).
+
+v1.21.4
+- Integrated 24-bit Truecolor ANSI escape sequence parsing (`\x1b[38;2;R;G;Bm` and `\x1b[48;2;R;G;Bm`) into the core terminal text rendering engine.
+- Updated the Windows ASCII art in the `fetch` program to utilize Truecolor, applying exact hex values (#F25022, #7FBA00, #00A4EF, #FFB900) for pixel-perfect Microsoft branding.
+
+v1.22.0
+- Created `help.html` documentation file.
+- Implemented a responsive, glassmorphism-styled grid layout detailing all available Velora `core` programs (calc, fetch, passgen, roll, sysinfo, todo, weather) and their command-line usage.
+
+v1.23.0
+- Expanded the `core` suite with three new tools: `b64` (Base64 encoder/decoder), `notes` (Terminal note-taking), and `timer` (Visual countdown timer).
+- All new core tools are built entirely from Python standard libraries, maintaining Velora's external dependency-free philosophy.
+- Appended descriptions and usage instructions for the new commands to `help.html`.
+
+v1.24.0
+- Added `hash` program to the `core` suite to compute MD5, SHA1, and SHA256 strings natively in the terminal.
+- Added `ipinfo` program to query and display the user's public IP and geographical location data.
+- Added `stopwatch` program for visual count-up time tracking.
+
+v1.25.0
+- Added three new programs to the `core` suite: `url` (URL encoder/decoder), `uuidgen` (v4 UUID generator), and `vcal` (Visual calendar viewer).
+- Updated `help.html` to include documentation and usage instructions for the new programs.
+
+v1.25.1
+- Renamed `vcal` to `cal` to act as a direct drop-in replacement for the native Unix command.
+- Configured the calendar engine to start the week on Sunday (`calendar.setfirstweekday(calendar.SUNDAY)`), perfectly mimicking the classic macOS/Linux `cal` layout formatting.
+
+v1.26.0
+- Built and integrated the Velora Package Manager (`vpm`) into the core suite!
+- Connects directly to the SNCloud REST API utilizing standard Python HTTP requests (via `urllib`).
+- By sending file contents as JSON payloads (`PUT`), `vpm` bypasses the complexities of multi-part file uploads, providing lightning-fast cloud publishing and remote installation.
+- Updated `help.html` with VPM command usage and syntax.
+
+v1.26.1
+- Fixed HTTP 403 Forbidden errors in `vpm` by explicitly attaching the `X-API-Key` header to all database `GET` requests (list and install) to authenticate with SNCloud's security rules.
+- Removed legacy brute-force string command rewriting from `terminal.py` which was causing shell line-wrapping echo leaks (like `"$VELORA_PYTHON" "$VELORA_CORE/vpm.py"`). The application now solely relies on the native `~/.velora/bin` wrappers introduced in v1.20.4.
+
+v1.26.2
+- Added the `update` command to the Velora Package Manager (`vpm`). Users can now easily fetch and overwrite existing local packages with the latest code versions directly from SNCloud.
+- Updated `help.html` to reflect the new `vpm update` capability in the usage instructions.
+
+v1.27.0
+- Added `vpm upgrade` to fetch the latest `terminal.py` source code directly from SNCloud and overwrite the active root application, allowing seamless over-the-air (OTA) updates for the entire terminal.
+- Added `vpm publish-app` to securely upload the local `terminal.py` code to the SNCloud `/app/terminal.json` database path.
+- Added `vpm update-all` to automatically iterate through and update all locally installed VPM packages.
+- Updated `help.html` usage for `vpm`.
+
+v1.27.1
+- Fixed a `UnicodeEncodeError` (`'charmap' codec can't encode character`) in the `vpm` program on Windows.
+- Reconfigured `sys.stdout` to use UTF-8 encoding in `vpm.py` to ensure emojis (like 📦) render properly in the terminal without crashing the package manager.
+
+v1.28.0
+- Added `vpm unpublish` command to the Velora Package Manager.
+- Users can now seamlessly delete specific packages directly from the SNCloud database using the REST API's HTTP `DELETE` method.
+- Updated `help.html` to reflect the new `unpublish` command in the `vpm` usage instructions.
+
+v1.29.0
+- Upgraded the Velora Package Manager (`vpm`) to support publishing and installing multi-file projects and directories.
+- `vpm publish` now recursively reads directories, encodes all nested assets and scripts in Base64 strings, and uploads them as a unified JSON payload.
+- `vpm install` extracts multi-file payloads into a hidden `_lib` folder and automatically generates an executable native `.py` stub mapping to the user's defined entry script (defaults to `main.py`).
+- Updated the `remove` command to clean up attached multi-file `_lib` directories recursively.
+
+v1.30.0
+- Added the `publish-main` command to the Velora Package Manager (`vpm`).
+- This securely batch-uploads all built-in core `.py` programs to SNCloud as "Official Velora Core Programs".
+- Secured the `publish-main` execution with a mandatory hardcoded password requirement.
+
+v1.30.1
+- Updated `vpm publish-main` to include an official package emoji (✅) in the description of Velora core programs.
+
+v1.30.2
+- Upgraded `vpm publish-main` to automatically parse and extract specific package descriptions from `help.html`.
+- Core packages pushed to SNCloud now display their actual documentation text alongside the official verified emoji (✅).
+
+v1.31.0
+- Added `__version__ = "1.0.0"` attribute tracking to all internal core programs.
+- Upgraded the Velora Package Manager (`vpm`) to automatically parse and extract version strings from local code via Regex during `vpm publish` and deploy them to SNCloud.
+- `vpm list` now visually displays the semantic version code next to each package name.
+- Updated `help.html` documentation design with dynamic floating CSS badges (styled as `.v-badge`) to highlight the version code for every available package card.
+
+v1.32.0
+- Implemented a background auto-update checker (`UpdateChecker` QThread) that safely pings SNCloud on startup.
+- The terminal now automatically prints a helpful ANSI-formatted notification banner if newer packages or terminal app versions are detected.
+- Notifications run entirely asynchronously to prevent any application/UI blocking on launch.
+- Updated `vpm publish-app` to automatically extract and publish the semantic `__version__` tracking variable from `terminal.py`.
+
+v1.33.0
+- Added the `vpm local` command to effortlessly check the currently installed versions of all local core programs and the main terminal application.
+- Updated `help.html` usage instructions for `vpm` to include the `local` argument.
+
+v1.34.0
+- Implemented the `vpm install all` command to bulk-install all verified official packages from the SNCloud database.
+- `vpm` now automatically scans the cloud registry for the ✅ official badge and seamlessly downloads the suite in a single run.
+- Updated `help.html` to highlight this new bulk installation capability.
+
+v1.35.0
+- Added `__description__ = "..."` attribute tracking to all internal core programs and `terminal.py`.
+- Upgraded the Velora Package Manager (`vpm`) to automatically parse and extract these description strings from local code via Regex during `vpm publish` and `vpm publish-app`.
+- This ensures descriptions are intrinsically tied to the package files and properly populate in the SNCloud registry upon updates.
+
+v1.36.0
+- Re-verified that the asynchronous `UpdateChecker` thread flawlessly checks SNCloud for updates on application launch.
+- Added the `vpm check` command to the Velora Package Manager to allow users to manually query the cloud registry for out-of-date packages and Terminal updates on demand.
+- Updated `help.html` usage for `vpm` to reflect the new `check` parameter.
+
+v1.37.0
+- Implemented dynamic visual progress bars in the Velora Package Manager for all over-the-air package installations and terminal upgrades using chunked network streaming.
+- Integrated smooth simulated progress generation for indeterminate API chunk sizes, guaranteeing a premium installation experience.
+- Bumped VPM core version to `v1.1.0` to reflect the new visual payload engine.
+
+v1.38.0
+- Redesigned the output of `vpm check` to clearly separate and highlight upgradable programs from the list.
+- Outdated packages now stand out in a dedicated "Upgradable Packages" list showing the transition from their current version to the new version.
+- Added an explicit section for "Velora Terminal Status" ensuring users clearly see whether the core terminal itself has an update available or not.
+
+v1.35.1
+- Added the current application version string underneath the ASCII logo branding that prints on terminal startup.
+- Re-verified that the background `UpdateChecker` automatically checks SNCloud and alerts users via prompt notifications on launch.
+
+v1.39.0
+- Overhauled the terminal startup ASCII branding with a powerful, high-fidelity block-character shadow layout.
+- Upgraded the startup aesthetics with a bright cyan and magenta gradient glow, replacing the older basic text art to reflect a much more premium engineering feel.
+
+v1.40.0
+- Enhanced the terminal startup branding with a new "Supported Platforms" section.
+- Added small, colorful ASCII art logos for macOS (Apple), Windows (Microsoft), and Linux (Tux) rendered in TrueColor directly below the main Velora block text.
+
+v1.40.1
+- Updated the Linux ASCII art in the `fetch` core program to a more compact Tux penguin design.
+- Bumped `fetch` core program version to v1.0.1.
+
+v1.40.2
+- Replaced the static "Linux Penguin" text in the Linux ASCII art of the `fetch` core program with the dynamic OS version.
+- Bumped `fetch` core program version to v1.0.2.
+
+v1.41.0
+- Perfectly aligned the Apple, Windows, and Linux startup branding ASCII art logos in `terminal.py`.
+- Resolved grid shifting issues caused by ANSI escape code padding mismatches.
+- Added OS text labels (macOS, Windows, Linux) cleanly centered beneath the respective ASCII logos.
+
+v1.41.1
+- Redesigned the macOS (Apple) ASCII art in the terminal startup branding to look much more recognizable.
+- Fixed visual breaks in the Apple logo by correcting the middle layout width to ` _ :'_ `.
+
+v1.41.2
+- Updated the startup `ascii_logo` in `terminal.py` with the provided string, applying new colors, alignment, and styling for the supported platforms (macOS, Windows, and Linux).
+
+v1.42.0
+- Removed the "Supported Platforms" section and ASCII logos (macOS, Windows, and Linux) from the terminal startup branding for a cleaner aesthetic.
+
+v1.43.0
+- Fixed a critical "always update available" bug affecting the Velora Package Manager (`vpm`).
+- Restored missing multi-file installation payload extraction logic that was accidentally overwritten during the Progress Bar update, allowing complex packages to update successfully.
+- Enabled `vpm.py` to update itself dynamically during the `vpm update-all` routine, ending the infinite update loop for the package manager.
+- Injected `__version__` and `__description__` directly into multi-file `.py` execution stubs so `vpm check` can accurately track their local semantic versions.
+- Added strict `.strip()` string sanitization to semantic version variables to prevent invisible carriage returns (`\r`) from breaking `int()` list comparisons.
+
+v1.44.0
+- Upgraded the `UpdateChecker` background thread to collect and display specific package names during terminal launch.
+- The startup "Update Available!" notification banner now explicitly lists exactly which packages have out-of-date versions.
+
+v1.45.0
+- Added the `vpm locate <pkg>` command to easily display the absolute installation paths of local packages.
+- Updated `vpm install` to explicitly output the absolute file path where the package was installed for better transparency.
+- Bumped VPM core version to `v1.4.0`.
+
+v1.46.0
+- Fixed a critical regression in `vpm` that caused an "always update available" loop.
+- Restored the multi-file publishing logic to `vpm publish`, ensuring directory-based packages are correctly serialized to JSON, which prevents data corruption in the SNCloud registry.
+- Bumped VPM core version to `v1.5.0` to reflect the restored functionality.
+
+v1.47.0
+- Fixed an issue where packages remained the same after updating because HTTP `GET` requests were being aggressively cached by network CDNs/proxies.
+- Implemented strict cache-busting headers (`Cache-Control: no-cache`) and dynamic timestamp query parameters (`?_t=...`) to all `urllib` SNCloud API requests.
+- Both the VPM package manager and the Terminal's background `UpdateChecker` now explicitly bypass all network caching layers, guaranteeing 100% fresh payload delivery.
+
+v1.49.0
+- Added `__author__` and `__website__` tracking variables to all core programs and the main terminal application.
+- Upgraded the Velora Package Manager (`vpm`) to securely parse, extract, and upload author metadata to SNCloud during `publish` operations.
+- `vpm list` and `vpm local` now dynamically format and display the author's name and website inline with the package version.
+- Implemented conditional website rendering ensuring URLs are completely hidden from the console and UI if an author chooses not to provide one.
+- Updated `help.html` to visually display author credits under every package card.
+
+v1.50.0
+- Added a proprietary `LICENSE` file to the repository.
+- Explicitly reserved all intellectual property and distribution rights to `qelaro.in` while providing standard AS IS liability protection.
+
+v1.51.0
+- Integrated native application compilation support! Added `build.py` to seamlessly compile the terminal and all its Python code into a secure, single native executable (e.g. `.exe` on Windows) using `PyInstaller`.
+- Refactored `terminal.py` and `vpm.py` to correctly interface with the immutable `_MEIPASS` runtime directory, explicitly locking away the bundled source code.
+- Upgraded the internal wrapper engine. Terminal tabs now directly execute the compiled native binary using the new `--run-core` CLI argument, completely bypassing the need for an external Python environment.
+- Upgraded `vpm.py` to cleanly split bundled cores and user-downloaded cores. OTA updates are now permanently written to `~/.velora/core`, safely overriding the bundled executables.
+
+v1.51.1
+- Fixed syntax errors and unexpected indentation in `vpm.py` caused during the `vpm local` refactoring.
+- Bumped VPM core version to `v1.8.1`.
+
+v1.51.2
+- Fixed a critical bug causing an infinite loop of new application windows opening on macOS and Linux after compiling with PyInstaller.
+- Upgraded the "Native Compiled Core Executor" in `terminal.py` to correctly intercept and execute the `-c` argument. This allows the frozen binary to securely run its own background PTY proxy string natively without mistakenly relaunching the GUI.
+
+v1.51.3
+- Fixed a critical regression in the compiled native application where opening a new tab would instantly crash and close due to a missing PTY module.
+- Explicitly imported `pty`, `fcntl`, `termios`, `select`, and `struct` at the global level in `terminal.py` so PyInstaller's static analyzer correctly bundles them for the background macOS/Linux shell proxy engine.
+- Explicitly imported all Python standard libraries utilized by the `core/` plugin scripts (e.g. `math`, `hashlib`, `uuid`) directly into `terminal.py` to ensure PyInstaller bundles them securely into the frozen executable.
+
+v1.48.0
+- Added `b32` core program for Base32 encoding and decoding natively.
+- Added `textstat` core program for quick file and text analysis (calculates word, line, and character counts).
+- Added `matrix` core program for a fun visual falling green code effect in the terminal using pure ANSI output.
+- Updated `sysinfo` to version `v1.1.0`, extracting and displaying the current active user within the OS metrics list.
+- Updated `calc` to version `v1.1.0`, adding support for `pow()`, `pi`, and `e` constants in the evaluated math environment.
+- Updated `help.html` documentation and visual `.v-badge` version tags to reflect the newly integrated and updated applications.
+
+v1.52.0
+- Updated `notes` core program to version `v1.1.0`, adding the `search` command to quickly query saved notes.
+- Updated `todo` core program to version `v1.1.0`, adding the `clear` command to delete all tasks.
+- Updated `cal` core program to version `v1.1.0`, allowing it to display the full calendar for an entire year when a single year argument is provided.
+
+v1.53.0
+- Upgraded the Velora Package Manager (`vpm`) to automatically compile and generate native shell wrappers immediately during installation or updates.
+- Packages installed via `vpm install` or updated via `vpm update` are now instantly executable in the current terminal session, removing the need to restart the application.
+- Bumped VPM core version to `v1.9.0`.
+
+v1.54.0
+- Upgraded `vpm update-all` to intelligently check versions and strictly update outdated packages instead of reinstalling everything.
+- Added the `vpm build` command to easily trigger the standalone PyInstaller compilation from the terminal.
+- `vpm update-all` and `vpm upgrade` now automatically execute `build.py` upon completion (if available) to ensure the generated `.exe` is always up to date with the latest code.
+- Bumped VPM core version to `v1.10.0`.
+
+v1.55.0
+- Upgraded `build.py` to automatically copy the freshly compiled native executable out of the `dist` folder and strictly replace the original executable in the main directory.
+- Implemented a Windows-specific bypass to safely rename running `.exe` files during the build process, preventing `PermissionError` when automatically updating an actively running application.
+- `build.py` now enforces `os.chdir` to the project root, ensuring that automatic PyInstaller compilations triggered by `vpm update-all` do not fail if the user's terminal is currently in a different working directory.
+
+v1.56.0
+- Updated `calc` core program to version `v1.2.0`.
+- Introduced an interactive REPL mode for `calc` when run without arguments, allowing users to evaluate multiple expressions continuously.
+- Expanded the safe math environment in `calc` to explicitly support `max()` and `min()` functions.
+- Updated `help.html` documentation and visual `.v-badge` version tags to reflect the updated `calc` functionality.
+
+v1.57.0
+- Fixed a bug where the terminal would continuously show "Update Available!" notifications on launch even after packages were successfully updated. The `UpdateChecker` thread in `terminal.py` now correctly queries the `~/.velora/core` directory (where user updates are saved) instead of solely looking at the bundled versions.
+- Enhanced the Velora Package Manager (`vpm`) to automatically overwrite the bundled source files in the project directory when running from an uncompiled source state. This guarantees that `build.py` compiles with the absolute latest code, preventing older package versions from being accidentally bundled into the `.exe`.
+- Bumped VPM core version to `v1.11.0`.
+- Bumped main application version to `v1.57.0`.
+
+v1.58.0
+- Fixed a major masking bug where `~/.velora/core` user updates would incorrectly mask newly compiled source code. `vpm install` now intelligently clears redundant user-cached packages when updating the main bundled source folder, guaranteeing the `UpdateChecker` always sees the freshest build.
+- Fixed a bug where `vpm check` and `vpm local` falsely reported the Terminal App as "v1.0.0" and constantly outdated when running the frozen executable. The terminal now injects `$VELORA_VERSION` directly into the shell environment to give the package manager accurate real-time version awareness.
+- Bumped main application version to `v1.58.0`.
+- Bumped VPM core version to `v1.12.0`.
+
+v1.59.0
+- Updated `todo` core program to version `v1.2.0`, adding an `edit` command to modify existing tasks in place.
+- Updated `notes` core program to version `v1.2.0`, adding an `edit` command to modify existing notes in place.
+- Updated `help.html` documentation and visual `.v-badge` version tags to reflect the updated `todo` and `notes` commands.
+- Bumped main application version to `v1.59.0`.
+
+v1.60.0
+- Implemented End-to-End Encryption for all local packages and data.
+- The Velora Package Manager (`vpm`) now strictly downloads and installs programs using byte-level XOR + Base64 encryption for single files, and automatically compiles multi-file projects to unreadable `.pyc` bytecodes, preventing any manual reading or editing.
+- Updated `notes` and `todo` core programs to save user data in encrypted format, protecting sensitive task and note information.
+- The terminal now securely encrypts command history saved to `~/.velora_history`.
+- Bumped main application version to `v1.60.0`.
+- Bumped VPM, `notes`, and `todo` versions to `v1.13.0`, `v1.3.0`, and `v1.3.0` respectively.
+
+v1.61.0
+- Refactored End-to-End Encryption logic to completely strip decryption/encryption implementations from the custom core programs (`notes.py`, `todo.py`, `vpm.py`).
+- The Terminal's native core executor (`--run-core`) now securely reads, decrypts, and executes encrypted module payloads in memory, eliminating visible fallback logic in the downloaded files.
+- The Terminal now globally injects the `encrypt_data` and `decrypt_data` security functions directly into Python's `builtins` namespace at runtime. Programs can securely read and write encrypted data without exposing the algorithm inside their readable source code.
+- Upgraded VPM to use `runpy` instead of `subprocess` when executing multi-file library entries, allowing them to perfectly inherit the native builtins and Terminal execution environment.
+- Bumped main application version to `v1.61.0` and updated the `vpm`, `notes`, and `todo` versions accordingly.
+
+v1.62.0
+- Upgraded VPM to strictly encrypt the execution stubs of multi-file packages as well, guaranteeing 100% of all local `.py` files inside `~/.velora/core` are safely unreadable.
+- Added pre-publish decryption to `vpm.py`. If a developer attempts to publish a file that is already encrypted locally, VPM will automatically decrypt it in memory before uploading, preventing double-encryption corruption on SNCloud.
+- Bumped main application version to `v1.62.0`.
+- Bumped VPM core version to `v1.15.0`.
+
+v1.62.1
+- Fixed Pylance static analysis warnings in `notes.py` and `todo.py` caused by dynamically injected builtins (`encrypt_data`, `decrypt_data`).
+- Added safe fallback lambda functions to resolve the injected builtins, which also allows the scripts to execute normally without crashing if run natively outside the Velora Terminal.
+- Bumped `notes` and `todo` versions to `v1.4.1`.
+
+v1.62.2
+- Fixed a critical execution bug (`Execution Error: Incorrect padding`) that prevented the unencrypted `vpm.py` source code from running natively. The terminal executor and `vpm publish` now use stricter regex parsing to differentiate actual encrypted payloads from generator string literals.
+- Bumped VPM core version to `v1.15.1` and main application version to `v1.62.1`.
+
+v1.63.0
+- Replaced the legacy `.pyc` compilation model in VPM with full recursive End-to-End Encryption. Every individual `.py` file downloaded within a multi-file project is now strictly encrypted using XOR+Base64 text.
+- Injected a powerful `sys.meta_path` module importer (`VeloraImporter`) and a new `run_encrypted` utility natively into `terminal.py`. The terminal can seamlessly load, import, and execute heavily encrypted code files directly from the disk.
+- Upgraded `vpm publish` to intercept encrypted `.py` files inside multi-file directories and automatically decrypt them in memory before uploading, guaranteeing safety from duplicate encryption corruption.
+- Bumped main application version to `v1.63.0`.
+- Bumped VPM core version to `v1.16.0`.
+
+v1.64.0
+- Updated `calc` core program to version `v1.3.0`, expanding the safe math environment to support advanced functions like `sin()`, `cos()`, `tan()`, `sqrt()`, and `log()`.
+- Updated `help.html` documentation to reflect the updated `calc` functionality.
+- Bumped main application version to `v1.64.0`.
+
+v1.64.1
+- Fixed a bug where `Ctrl+W` sent the wrong control sequence (`Ctrl+T`) to shell applications in Raw Mode.
+- Improved `Ctrl+W` logic to close only the focused pane instead of the entire tab when using split screens.
+- Fixed a UI bug in the tab context menu where renaming a Settings tab applied a terminal icon.
+- Bumped main application version to `v1.64.1`.
+
+v1.65.0
+- Added `Ctrl + Mouse Wheel` zooming support to the terminal buffer for intuitive font scaling.
+- Implemented "Duplicate Tab" in the tab context menu to quickly spin up new sessions with identical labels.
+- Refined the "Rename Tab" dialog UI with improved styling and better icon prefix handling.
+- Optimized the ANSI text insertion engine to better handle character overwriting in both Raw and Normal modes.
+- Bumped main application version to `v1.65.0`.
+
+v1.66.0
+- Upgraded VPM integration to support binary-aware upgrade paths for compiled executables.
+- Added a dedicated "Updates" indicator button to the Status Bar for real-time package health monitoring.
+- Enhanced command interception to provide smarter suggestions for VPM registry packages.
+- Improved UpdateChecker to cache cloud metadata, reducing network overhead for common VPM queries.
+- Bumped main application version to `v1.66.0`.
+
+v1.67.0
+- Upgraded `vpm list` with a high-fidelity ANSI grid layout and better metadata visualization.
+- Implemented Registry Caching in the background `UpdateChecker` for instant package discovery.
+- Added "Official" badge support and author attribution to the package list.
+- Improved terminal-wide interception for better command handling in native environments.
+- Bumped main application version to `v1.67.0`.
+
+v1.68.0
+- Redesigned `vpm list` with a high-fidelity dashboard layout and improved metadata contrast.
+- Implemented the `vpm info <pkg>` interceptor to display detailed package cards.
+- Enhanced "Command Not Found" logic to provide richer, color-coded VPM installation suggestions.
+- Optimized registry cache lookups for faster command discovery.
+- Bumped main application version to `v1.68.0`.
+
+v1.69.0
+- Overhauled `vpm list` with a new categorized grid layout (Official vs Community).
+- Enhanced VPM metadata rendering with improved color contrast and semantic grouping.
+- Synchronized the standalone `vpm.py` list design with the terminal's high-fidelity interceptor.
+- Improved sorting logic in the package registry to prioritize verified tools.
+- Bumped main application version to `v1.69.0`.
+
+v1.69.1
+- Fixed alignment jitter in `vpm list` caused by multi-width emoji characters.
+- Corrected border width calculations to ensure box-drawing integrity across all sections.
+- Improved visual separation between Official and Community package groups.
+- Bumped main application version to `v1.69.1`.
+
+v1.70.0
+- Implemented "One-Command" Remote Bootstrapper for instant online access.
+- Added a cross-platform Desktop Shortcut Generator for Windows, macOS, and Linux.
+- Optimized the installation workflow to handle remote repository cloning automatically.
+- Enhanced the setup logic to verify Python environments before deployment.
+- Bumped main application version to `v1.70.0`.
+
+v1.71.0
+- Implemented End-to-End Encryption in the Online Bootstrapper.
+- Automated the conversion of all source files into secure encrypted stubs during installation.
+- Hardened the local installation directory to prevent unauthorized code reading/modification.
+- Synchronized the bootstrapper encryption with the terminal's native Core Executor.
+- Bumped main application version to `v1.71.0`.
+
+v1.72.0
+- Separated `vpm.py` from the `core/` directory to allow repository-independent plugin management.
+- Updated Terminal Core Executor to support root-level utility discovery.
+- Enhanced VPM path logic to manage the `core/` registry from the application root.
+- Optimized native wrapper generation for separated system utilities.
+- Bumped main application version to `v1.72.0`.
+
+v1.73.0
+- Fully restored all Velora Package Manager (VPM) features in the separated root-level `vpm.py`.
+- Re-implemented `local`, `check`, `update-all`, `upgrade`, `publish`, and `unpublish` commands.
+- Synchronized standalone VPM designs with the high-fidelity terminal-interception dashboards.
+- Fixed path resolution for Terminal OTA upgrades and native build triggers.
+- Bumped VPM core version to `v1.19.0`.
+- Bumped main application version to `v1.73.0`.
+
+v1.74.0
+- Verified and restored missing Velora Package Manager (VPM) features: `install all`, `publish-app`, `publish-main`, and `check`.
+- Enhanced `vpm local` to include detailed Velora Terminal application versioning.
+- Updated VPM help menu and documentation consistency for `locate` and `remove` commands.
+- Fixed automatic PyInstaller build triggers after terminal upgrades and package updates.
+- Bumped main application version to `v1.74.0`.
+
+v1.75.0
+- Optimized Remote Bootstrapper for the root-level VPM architecture.
+- Enhanced End-to-End Encryption logic to handle root-level utility stubs.
+- Updated Blueprint documentation with Remote Installation and Hardening data flows.
+- Synchronized installation versioning across all distribution scripts.
+- Bumped main application version to `v1.75.0`.
+
+v1.76.0
+- Implemented stronger obfuscation for sensitive IDs (PROJECT_ID, API_KEY) in VPM and UpdateChecker.
+- Replaced simple XOR key with a longer, more complex, and less guessable string.
+- Ensured consistent key usage across all encryption/decryption functions in the ecosystem.
+- Bumped main application version to `v1.76.0`.
+
+v1.76.1
+- Fixed `UnicodeDecodeError` in `UpdateChecker` by forcing re-encryption of `terminal.py` during bootstrapping.
+- Removed redundant "already encrypted" check in `bootstrap.py` to ensure key updates are always applied.
+- Bumped main application version to `v1.76.1`.
+
+v1.76.2
+- Resolved `UnicodeDecodeError` by re-generating encrypted PROJECT_ID and API_KEY payloads for the 39-character key.
+- Refactored decryption logic in `VeloraImporter` to use dynamic key length modulo.
+- Synchronized key obfuscation logic across VPM and UpdateChecker.
+- Bumped main application version to `v1.76.2`.
+
+v1.76.3
+- Fixed HTTP Error 400 in `vpm publish-main` by synchronizing legacy encryption keys with the new global security key.
+- Updated `vpm.py` (root and core) to use `VeloraSuperSecureKeyForObfuscation2026!` for all internal stubbing and publishing operations.
+
+v1.76.4
+- Corrected `PROJECT_ID` obfuscation string to resolve to `bb6bd9b3` using the 2026 security key.
+- Enhanced `vpm.py` to recognize and un-stub files encrypted by `bootstrap.py` (using the `__payload__` variable) before publishing.
+- Verified synchronization of Project ID and API Key across `terminal.py`, `vpm.py`, and `core/vpm.py`.
+
+v1.76.5
+- Fixed persistent HTTP Error 400 in `vpm publish-main` by correcting the XOR-Base64 obfuscation strings for `PROJECT_ID` and `API_KEY`.
+- Validated that `DAMZDRZYMUU=` correctly resolves to `bb6bd9b3` and `JQshWFBOWDAREhVWFWJUAlxCBiJWGBoSXkFqUlRSUhASEktCVAgXV1c=` resolves to the provided SNCloud API key.

@@ -1,0 +1,7 @@
+alwes update the blue print and req.txt if needed
+
+alwes maintain the app version and evry version update in version .txt by addding the what you update with version code
+
+alwes update the help.html if any update in core program and adding any new progam or remove
+
+alwes any update in programs pls update the version code and also add note all the version things what added or removed one by one version

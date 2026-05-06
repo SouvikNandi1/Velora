@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velora Core Programs</title>
+    <style>
+        :root {
+            --bg: #1e1e2e;
+            --fg: #cdd6f4;
+            --border: #585b70;
+            --card-bg: rgba(69, 71, 90, 0.4);
+            --cyan: #8be9fd;
+            --green: #50fa7b;
+            --pink: #ff79c6;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--fg);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: var(--pink);
+            margin-bottom: 40px;
+            font-size: 2.5em;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--cyan);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card p {
+            line-height: 1.6;
+            margin-bottom: 15px;
+            color: #bac2de;
+        }
+        .usage {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            color: var(--green);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .code-inline {
+            color: var(--pink);
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .v-badge {
+            font-size: 0.5em;
+            color: var(--cyan);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: auto;
+        }
+        .author {
+            font-size: 0.85em;
+            color: var(--border);
+            margin-top: -5px;
+            margin-bottom: 12px;
+        }
+        .author a { color: var(--cyan); text-decoration: none; }
+        .author a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Velora Core Programs</h1>
+        <div class="grid">
+            
+            <div class="card">
+                <h2>📝 b32 <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A fast Base32 encoder and decoder utility for encoding text directly from the command prompt.</p>
+                <div class="usage">b32 [enc | dec] &lt;text&gt;</div>
+            </div>
+
+            <div class="card">
+                <h2>📝 b64 <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A fast Base64 encoder and decoder utility for encoding text directly from the command prompt.</p>
+                <div class="usage">b64 [enc | dec] &lt;text&gt;</div>
+            </div>
+
+            <div class="card">
+                <h2>📅 cal <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Displays a visual terminal calendar for the current (or specified) month and year.</p>
+                <div class="usage">cal [month] [year]</div>
+            </div>
+
+            <div class="card">
+                <h2>🧮 calc <span class="v-badge">v1.3.0</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A built-in terminal calculator that safely evaluates mathematical expressions (including sin, cos, sqrt, log). Run without arguments to start the interactive REPL mode.</p>
+                <div class="usage">calc [expression]</div>
+            </div>
+
+            <div class="card">
+                <h2>🖥️ fetch <span class="v-badge">v1.0.3</span></h2>
+                <div class="author">By Souvik</div>
+                <p>An OS-specific system fetch tool that prints an ASCII logo and system information including Kernel, Arch, and Python version.</p>
+                <div class="usage">fetch</div>
+            </div>
+
+            <div class="card">
+                <h2>#️⃣ hash <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Computes cryptographic hashes (MD5, SHA1, SHA256) for a given text string.</p>
+                <div class="usage">hash [md5 | sha1 | sha256] &lt;text&gt;</div>
+            </div>
+
+            <div class="card">
+                <h2>🌍 ipinfo <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Fetches and displays your public IP address, ISP, and geographical location.</p>
+                <div class="usage">ipinfo</div>
+            </div>
+
+            <div class="card">
+                <h2>💻 matrix <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Displays a classic falling green code matrix effect in the terminal.</p>
+                <div class="usage">matrix</div>
+            </div>
+
+            <div class="card">
+                <h2>🗒️ notes <span class="v-badge">v1.4.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A quick text note-taking tool to jot down references or ideas. Saves persistently to <span class="code-inline">~/.velora_notes</span>.</p>
+                <div class="usage">notes [add | edit | rm | list | clear | search]</div>
+            </div>
+
+            <div class="card">
+                <h2>🔐 passgen <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A secure random password generator. By default generates a 16-character password containing letters, numbers, and symbols.</p>
+                <div class="usage">passgen [length]</div>
+            </div>
+
+            <div class="card">
+                <h2>🎲 roll <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A dice roller for D&D or tabletop style rolling. Specify the number of dice and sides (e.g., 2d6).</p>
+                <div class="usage">roll &lt;NdM&gt;</div>
+            </div>
+
+            <div class="card">
+                <h2>ℹ️ sysinfo <span class="v-badge">v1.1.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Displays a quick and simple summary of your basic system architecture and host node information.</p>
+                <div class="usage">sysinfo</div>
+            </div>
+
+            <div class="card">
+                <h2>📊 textstat <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Calculates statistics for a given text or file, including word, line, and character counts.</p>
+                <div class="usage">textstat &lt;text_or_file&gt;</div>
+            </div>
+
+            <div class="card">
+                <h2>⏱️ stopwatch <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A visual command-line stopwatch that counts up until stopped with Ctrl+C.</p>
+                <div class="usage">stopwatch</div>
+            </div>
+
+            <div class="card">
+                <h2>⏳ timer <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A visual command-line countdown timer that displays remaining minutes and seconds directly in the prompt.</p>
+                <div class="usage">timer &lt;seconds&gt;</div>
+            </div>
+
+            <div class="card">
+                <h2>✅ todo <span class="v-badge">v1.4.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A built-in terminal task manager that saves tasks persistently to <span class="code-inline">~/.velora_todos</span>.</p>
+                <div class="usage">todo [add | edit | done | list | clear]</div>
+            </div>
+
+            <div class="card">
+                <h2>🔗 url <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>A fast URL encoder and decoder utility for formatting web strings safely.</p>
+                <div class="usage">url [enc | dec] &lt;text&gt;</div>
+            </div>
+
+            <div class="card">
+                <h2>🆔 uuidgen <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Generates one or more random, unique v4 UUIDs.</p>
+                <div class="usage">uuidgen [count]</div>
+            </div>
+
+            <div class="card">
+                <h2>📦 vpm <span class="v-badge">v1.16.0</span></h2>
+                <div class="author">By <a href="https://github.com/souvik" target="_blank">Souvik</a></div>
+                <p>The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use <span class="code-inline">install all</span> to easily grab the entire official suite.</p>
+                <div class="usage">vpm [list | local | check | locate | install | update | remove | build | publish]</div>
+            </div>
+
+            <div class="card">
+                <h2>🌤️ weather <span class="v-badge">v1.0.1</span></h2>
+                <div class="author">By Souvik</div>
+                <p>Fetches the current weather. Works automatically for your IP's location or for a specific city name.</p>
+                <div class="usage">weather [city]</div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
