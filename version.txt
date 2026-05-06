@@ -825,3 +825,8 @@ v2.00.0
 - Optimized VPM UI with glassmorphism aesthetics and a responsive grid layout.
 - Improved application startup stability by making update checks asynchronous.
 - Robust version comparison logic to handle ecosystem-wide synchronization.
+
+v2.00.3
+- Fixed missing tab close buttons by implementing a dynamically generated SVG close icon in the application stylesheet.
+- Improved tab bar responsiveness and close button positioning across different themes.
+- Synchronized ecosystem-wide versioning to v2.00.3 for Terminal, VPM, and Bootstrap.

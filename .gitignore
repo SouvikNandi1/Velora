@@ -1,5 +1,6 @@
 # Ignore local Velora secret storage and generated files
 .velora/
+.agents/
 
 # Ignore local core programs and generated files
 core/

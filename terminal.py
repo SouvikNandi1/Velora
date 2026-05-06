@@ -1,4 +1,4 @@
-__version__ = "2.00.2"
+__version__ = "2.00.3"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -1490,6 +1490,13 @@ class TerminalSession(QWidget):
 
         self.output_area = TerminalDisplay()
         self.apply_font()
+        
+        # AI Oracle Integration
+        self.ai_bar = AIAssistant(self.current_theme if hasattr(self, 'current_theme') else THEMES["Dracula (Dark)"])
+        self.ai_bar.command_suggested.connect(self.handle_ai_suggestion)
+        self.ai_bar.hide()
+        self.layout.addWidget(self.ai_bar)
+        
         self.output_area.command_entered.connect(self.run_command)
         self.output_area.control_sequence.connect(self.run_control_sequence)
         self.output_area.settings_requested.connect(self.settings_requested.emit)
@@ -1513,6 +1520,10 @@ class TerminalSession(QWidget):
         self.search_bar.customContextMenuRequested.connect(self.show_search_context_menu)
 
         self.output_area.find_requested.connect(self.toggle_search)
+        
+        # New: Toggle AI Bar
+        self.shortcut_ai = QShortcut(QKeySequence("Ctrl+Shift+A"), self)
+        self.shortcut_ai.activated.connect(self.toggle_ai_bar)
 
         self.current_format = QTextCharFormat()
         self.last_command = ""
@@ -1657,11 +1668,24 @@ class TerminalSession(QWidget):
             QScrollBar::handle:vertical:hover {{
                 background-color: {theme['border']};
             }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
                 border: none; background: none; height: 0px;
             }}
         """)
+
+    def handle_ai_suggestion(self, command):
+        """Insert the AI suggested command into the terminal prompt"""
+        self.output_area.replace_input(command)
+        self.output_area.setFocus()
+
+    def toggle_ai_bar(self):
+        """Show or hide the AI assistant bar"""
+        is_visible = not self.ai_bar.isVisible()
+        self.ai_bar.setVisible(is_visible)
+        if is_visible:
+            self.ai_bar.input.setFocus()
+        else:
+            self.output_area.setFocus()
 
     def run_command(self, command):
         self.last_command = command
@@ -2358,6 +2382,74 @@ class UpdateChecker(QThread):
     def is_newer(self, cloud_ver, local_ver):
         return is_newer(cloud_ver, local_ver)
 
+
+class AIAssistant(QFrame):
+    command_suggested = pyqtSignal(str)
+
+    def __init__(self, theme, parent=None):
+        super().__init__(parent)
+        self.theme = theme
+        self.setFixedHeight(50)
+        self.setObjectName("AIAssistant")
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 0, 15, 0)
+        layout.setSpacing(10)
+        
+        icon = QLabel("✨")
+        icon.setStyleSheet("font-size: 18px;")
+        layout.addWidget(icon)
+        
+        self.input = QLineEdit()
+        self.input.setPlaceholderText("Ask the Velora Oracle... (e.g., 'How do I list large files?')")
+        self.input.setStyleSheet(f"""
+            QLineEdit {{
+                background: transparent;
+                border: none;
+                color: {theme['fg']};
+                font-size: 14px;
+                font-style: italic;
+            }}
+        """)
+        self.input.returnPressed.connect(self.process_query)
+        layout.addWidget(self.input)
+        
+        self.btn = QPushButton("Ask")
+        self.btn.setFixedWidth(60)
+        self.btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {theme['sel']};
+                color: {theme['fg']};
+                border: 1px solid {theme['border']};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            QPushButton:hover {{ background: {theme['border']}; }}
+        """)
+        self.btn.clicked.connect(self.process_query)
+        layout.addWidget(self.btn)
+
+    def process_query(self):
+        query = self.input.text().lower()
+        if not query: return
+        
+        response = ""
+        if "list" in query and "file" in query: response = "ls -la"
+        elif "process" in query or "running" in query: response = "ps aux"
+        elif "ip" in query or "network" in query: response = "ipinfo"
+        elif "system" in query or "info" in query: response = "sysinfo"
+        elif "weather" in query: response = "weather"
+        elif "search" in query: response = "grep -r 'text' ."
+        
+        if response:
+            self.command_suggested.emit(response)
+            self.input.setText(f"Oracle Suggests: {response}")
+            QTimer.singleShot(3000, lambda: self.input.clear())
+        else:
+            self.input.setText("The Oracle is thinking... (Try: 'list files')")
+            QTimer.singleShot(2000, lambda: self.input.setPlaceholderText("Ask the Velora Oracle..."))
+
+
 class TerminalApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -2382,13 +2474,17 @@ class TerminalApp(QMainWindow):
         self.central_layout.setContentsMargins(0, 0, 0, 0)
         self.central_layout.setSpacing(0)
 
+        # Tabs
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
-        self.tabs.setMovable(True)           # drag-to-reorder tabs
-        self.tabs.setElideMode(Qt.TextElideMode.ElideRight)  # elide long names
+        self.tabs.setMovable(True)
+        self.tabs.tabBar().setExpanding(False)
+        self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
+        self.tabs.setDocumentMode(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tabs.customContextMenuRequested.connect(self.show_tab_context_menu)
+        
         self.central_layout.addWidget(self.tabs)
         self.setCentralWidget(self.central_container)
         
@@ -2852,6 +2948,11 @@ class TerminalApp(QMainWindow):
         img_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'velora.png')
         img_url = QUrl.fromLocalFile(img_file).toString()
 
+        # Generate a small close icon SVG for the tabs based on the current theme's foreground color
+        close_icon_svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{theme['fg']}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>"""
+        close_icon_b64 = base64.b64encode(close_icon_svg.encode()).decode()
+        close_icon_url = f"data:image/svg+xml;base64,{close_icon_b64}"
+
         self.setStyleSheet(f"""
             #MainWindow {{
                 background: transparent;
@@ -2872,62 +2973,60 @@ class TerminalApp(QMainWindow):
             QTabWidget::pane {{
                 background-color: transparent;
                 border: none;
-                border-top: 1px solid {border_rgba};
                 margin-top: -1px;
-            }}
-            QTabWidget::tab-bar {{
-                alignment: left;
             }}
             QTabBar {{
                 background: transparent;
+                qproperty-expanding: false;
                 qproperty-drawBase: 0;
             }}
             QTabBar::tab {{
-                background: transparent;
-                color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.45);
-                padding: 9px 20px 8px 16px;
-                border: none;
-                border-bottom: 2px solid transparent;
-                border-radius: 0px;
-                margin: 0px 1px;
-                font-size: 13px;
-                font-weight: 500;
-                min-width: 110px;
-                letter-spacing: 0.3px;
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid transparent;
+                color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.6);
+                padding: 8px 32px 8px 18px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                margin-top: 6px;
+                margin-right: 2px;
+                font-size: 12px;
+                min-width: 140px;
+                text-align: left;
             }}
             QTabBar::tab:selected {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba({_hex_to_rgb_str(theme['sel'])}, 0.95),
-                    stop:1 rgba({_hex_to_rgb_str(theme['bg'])}, 0.0));
+                background: rgba({_hex_to_rgb_str(theme['bg'])}, 0.5);
+                border: 1px solid {border_rgba};
+                border-bottom: none;
                 color: {theme['fg']};
-                font-weight: 700;
-                border-bottom: 2px solid {theme['border']};
+                margin-top: 2px;
+                padding-top: 12px;
+                font-weight: 500;
             }}
             QTabBar::tab:hover:!selected {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 0.06),
-                    stop:1 rgba(255, 255, 255, 0.0));
-                color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.75);
-                border-bottom: 2px solid {border_rgba};
+                background: rgba(255, 255, 255, 0.08);
+                color: {theme['fg']};
             }}
             QTabBar::close-button {{
                 subcontrol-position: right;
-                padding: 2px 3px;
-                margin-left: 4px;
-                border-radius: 6px;
+                image: url("{close_icon_url}");
+                width: 12px;
+                height: 12px;
+                padding: 4px;
+                margin-right: 8px;
+                border-radius: 4px;
             }}
             QTabBar::close-button:hover {{
-                background-color: rgba(255, 80, 80, 0.40);
+                background-color: rgba(255, 80, 80, 0.3);
             }}
             QToolButton {{
-                background-color: transparent;
+                background-color: rgba(255, 255, 255, 0.05);
                 color: {theme['fg']};
                 border: 1px solid {border_rgba};
                 font-weight: bold;
-                font-size: 16px;
-                padding: 4px 12px;
-                margin: 5px 6px;
-                border-radius: 20px;
+                font-size: 14px;
+                padding: 6px 14px;
+                margin: 6px 4px;
+                border-radius: 8px;
             }}
             QToolButton:hover {{
                 background-color: {sel_rgba};
