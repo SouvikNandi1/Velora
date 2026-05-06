@@ -86,7 +86,7 @@ def get_base_url():
 def get_request(url, data=None, method=None):
     _, api_key = get_remote_credentials()
     req = urllib.request.Request(url, data=data, method=method)
-    req.add_header('User-Agent', 'Velora/1.0')
+    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
     req.add_header('X-API-Key', api_key)
     req.add_header('Cache-Control', 'no-cache')
     if data is not None:

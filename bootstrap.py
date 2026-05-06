@@ -240,7 +240,22 @@ def main():
                 downloaded = (count * block_size) / (1024 * 1024)
                 print(f"  \x1b[33m⏳\x1b[0m \x1b[90mDownloading latest source... \x1b[38;5;51m{downloaded:.2f} MB\x1b[0m" + " " * 10, end='\r', flush=True)
 
-        urllib.request.urlretrieve(REPO_URL, zip_path, reporthook=download_progress)
+        # Use a custom Request with User-Agent to avoid being blocked by GitHub or proxies
+        req = urllib.request.Request(REPO_URL, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'})
+        
+        with urllib.request.urlopen(req) as response:
+            total_size = int(response.info().get('Content-Length', 0))
+            downloaded = 0
+            block_size = 8192
+            with open(zip_path, 'wb') as out_file:
+                while True:
+                    buffer = response.read(block_size)
+                    if not buffer:
+                        break
+                    downloaded += len(buffer)
+                    out_file.write(buffer)
+                    download_progress(downloaded // block_size, block_size, total_size)
+        print() # New line after progress bar
         
         import zipfile
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
