@@ -1,5 +1,4 @@
-__version__ = "1.85.5"
-VERSION = "1.85.5"
+__version__ = "1.82.5"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -138,8 +137,8 @@ if hasattr(signal, 'SIGTTOU'):
 if hasattr(signal, 'SIGTTIN'):
     signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit, QScrollArea, QSizePolicy
-from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer, QPoint
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit
+from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon, QTextDocument, QAction
 import urllib.request
 import json
@@ -835,142 +834,10 @@ class SettingsTab(QWidget):
                 pass
             self.history_cleared.emit()
 
-
-class _UpdateCheckerWorker(QThread):
-    """Background thread: checks for terminal + package updates without blocking startup."""
-    result_ready = pyqtSignal(str)
-    error_msg    = pyqtSignal(str)
-
-    def __init__(self, local_version, manual=False, parent=None):
-        super().__init__(parent)
-        self.local_version = local_version
-        self.manual = manual
-
-    def _is_newer(self, cloud_ver, local_ver):
-        try:
-            return [int(x) for x in cloud_ver.split('.')] > [int(x) for x in local_ver.split('.')]
-        except Exception:
-            return cloud_ver != local_ver
-
-    def run(self):
-        import ssl, urllib.request, json, time, re, os, sys, platform
-        try:
-            import vpm
-            project_id, api_key = vpm.get_remote_credentials()
-        except Exception as e:
-            if self.manual:
-                self.error_msg.emit(
-                    f"\r\n\x1b[31;1m✗ Update check failed:\x1b[0m "
-                    f"\x1b[90mCould not load credentials: {e}\x1b[0m\r\n")
-            return
-
-        if not project_id or not api_key:
-            if self.manual:
-                self.error_msg.emit(
-                    "\r\n\x1b[31;1m✗ Update check failed:\x1b[0m "
-                    "\x1b[90mNo cloud credentials configured.\x1b[0m\r\n")
-            return
-
-        ctx = ssl._create_unverified_context()
-        headers = {'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'}
-        ts = int(time.time())
-
-        system = platform.system()
-        if system == "Windows":
-            bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
-        else:
-            bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
-
-        info_msg = ""
-        updates_found = False
-
-        # --- Terminal / bootstrap version check ---
-        try:
-            req = urllib.request.Request(
-                f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={ts}", headers=headers)
-            with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                if isinstance(data, dict):
-                    cloud_ver = data.get('version', '1.0.0').strip()
-                    if self._is_newer(cloud_ver, self.local_version):
-                        updates_found = True
-                        info_msg += "\r\n\x1b[33;1m╔══ ⬆  Update Available ═══════════════════════════╗\x1b[0m\r\n"
-                        info_msg += f"\x1b[33;1m║  Terminal  \x1b[97mv{self.local_version}\x1b[33m  →  \x1b[32mv{cloud_ver}  \x1b[33;1m║\x1b[0m\r\n"
-                        info_msg += "\x1b[33;1m╚══════════════════════════════════════════════════╝\x1b[0m\r\n"
-                        info_msg += f"  \x1b[90mRun: \x1b[32;1mvpm upgrade\x1b[0m\x1b[90m  or bootstrap:\x1b[0m\r\n"
-                        info_msg += f"  \x1b[32m{bootstrap_cmd}\x1b[0m\r\n\r\n"
-        except Exception as _e:
-            if self.manual:
-                info_msg += f"\x1b[90m  Terminal check failed: {_e}\x1b[0m\r\n"
-
-        # --- Package updates check: scan ALL locally installed files first ---
-        try:
-            req = urllib.request.Request(
-                f"https://sncloud.in/api/db/{project_id}/packages.json?_t={ts}", headers=headers)
-            with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
-                cloud_registry = json.loads(resp.read().decode('utf-8'))
-
-            if isinstance(cloud_registry, dict):
-                user_core_dir = os.path.expanduser("~/.velora/core")
-                bundled_core_dir = os.path.join(
-                    getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.argv[0]))), 'core')
-
-                # Prefer user_core_dir (unencrypted); fall back to bundled only if not in user dir
-                local_files = {}
-                for search_dir in [bundled_core_dir, user_core_dir]:  # user_core overrides bundled
-                    if os.path.isdir(search_dir):
-                        for fpath in os.listdir(search_dir):
-                            if fpath.endswith('.py'):
-                                pkg_name = fpath[:-3]
-                                local_files[pkg_name] = os.path.join(search_dir, fpath)
-
-                pkg_updates = []
-                for pkg_name, local_path in local_files.items():
-                    if pkg_name not in cloud_registry:
-                        continue
-                    cloud_info = cloud_registry[pkg_name]
-                    if not isinstance(cloud_info, dict):
-                        continue
-                    cloud_pkg_ver = cloud_info.get('version', '1.0.0').strip()
-                    try:
-                        with open(local_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                        # Extract version or default to 0.0.0 for unknown/encrypted
-                        m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']',
-                                      content, re.MULTILINE)
-                        local_pkg_ver = m.group(1).strip() if m else "0.0.0"
-                        
-                        if self._is_newer(cloud_pkg_ver, local_pkg_ver):
-                            pkg_updates.append((pkg_name, local_pkg_ver, cloud_pkg_ver))
-                    except Exception:
-                        pass
-
-                if pkg_updates:
-                    updates_found = True
-                    info_msg += "\x1b[36;1m  📦 Package updates available:\x1b[0m\r\n"
-                    for pkg, lv, cv in sorted(pkg_updates):
-                        info_msg += (f"  \x1b[32m◆ {pkg:<14}\x1b[0m "
-                                     f"\x1b[90mv{lv} → \x1b[32mv{cv}\x1b[0m\r\n")
-                    info_msg += "  \x1b[90mRun \x1b[32;1mvpm update-all\x1b[0m\x1b[90m to update all\x1b[0m\r\n\r\n"
-        except Exception as e:
-            if self.manual:
-                info_msg += f"\x1b[90m  Package check failed: {e}\x1b[0m\r\n"
-
-        if updates_found:
-            self.result_ready.emit(info_msg)
-        elif self.manual:
-            self.result_ready.emit(
-                "\r\n\x1b[32;1m✔ All up to date!\x1b[0m "
-                "\x1b[90mNo updates found for terminal or packages.\x1b[0m\r\n"
-            )
-
-
 class TerminalSession(QWidget):
-
     zoom_changed = pyqtSignal(int)
     settings_requested = pyqtSignal()
     session_closed = pyqtSignal()
-    title_changed = pyqtSignal(str)
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -1077,33 +944,103 @@ class TerminalSession(QWidget):
         )
         self.insert_ansi_text(ascii_logo)
         
-        # Kick off async update check — never blocks startup
-        self._start_async_update_check()
+        # Show startup information
+        self.show_startup_info()
 
-    def _start_async_update_check(self, manual=False):
-        """Run the update check in a background thread so startup is instant."""
-        # Keep a strong reference so the worker isn't GC'd before result_ready fires
-        worker = _UpdateCheckerWorker(__version__, manual=manual)
-        self._update_worker = worker  # strong ref
-        worker.result_ready.connect(self._on_update_result)
-        worker.error_msg.connect(self.insert_ansi_text)
-        # Only deleteLater AFTER result_ready has been processed (use queued connection order)
-        worker.result_ready.connect(lambda _: QTimer.singleShot(200, worker.deleteLater))
-        worker.error_msg.connect(lambda _: QTimer.singleShot(200, worker.deleteLater))
-        worker.finished.connect(lambda: None)  # keep alive until signals delivered
-        worker.start()
-
-    def _on_update_result(self, msg):
-        """Deliver update message. Delay at startup so shell prompt prints first."""
-        worker = self.sender()
-        is_manual = getattr(worker, 'manual', False) if worker else False
-        if is_manual:
-            # Manual vpm check — show immediately, no delay
-            self.insert_ansi_text(msg)
+    def show_startup_info(self):
+        """Display startup information only if updates are available"""
+        info_msg = ""
+        updates_found = False
+        
+        # Determine system-specific bootstrap command
+        system = platform.system()
+        if system == "Windows":
+            bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
         else:
-            # Auto startup check — wait for shell prompt to appear first
-            QTimer.singleShot(1800, lambda: self.insert_ansi_text(msg) if self else None)
-
+            bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
+        
+        # Check for bootstrap/terminal updates
+        try:
+            import vpm
+            project_id, api_key = vpm.get_remote_credentials()
+            if project_id and api_key:
+                import ssl
+                import urllib.request
+                import json
+                import time
+                
+                ctx = ssl._create_unverified_context()
+                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}", 
+                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if data and isinstance(data, dict):
+                        cloud_app_ver = data.get('version', '1.0.0').strip()
+                        if self.is_newer_version(cloud_app_ver, __version__):
+                            updates_found = True
+                            info_msg += "\x1b[36;1m═══ Bootstrap Update Available ═══\x1b[0m\r\n"
+                            info_msg += f"\x1b[32;1m{bootstrap_cmd}\x1b[0m\r\n"
+                            info_msg += "\x1b[90mRun this command to update Velora from the latest repository\x1b[0m\r\n\r\n"
+        except:
+            pass  # Silently fail if update check fails
+        
+        # Check for package updates
+        pkg_updates = []
+        try:
+            import vpm
+            project_id, api_key = vpm.get_remote_credentials()
+            if project_id and api_key:
+                import ssl
+                import urllib.request
+                import json
+                import time
+                
+                ctx = ssl._create_unverified_context()
+                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
+                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if isinstance(data, dict):
+                        core_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core')
+                        user_core_dir = os.path.expanduser("~/.velora/core")
+                        
+                        for pkg, info in data.items():
+                            if isinstance(info, dict):
+                                cloud_ver = info.get('version', '1.0.0').strip()
+                                local_user = os.path.join(user_core_dir, f"{pkg}.py")
+                                local_bundled = os.path.join(core_dir, f"{pkg}.py")
+                                local_path = local_user if os.path.exists(local_user) else local_bundled
+                                
+                                if os.path.exists(local_path):
+                                    try:
+                                        with open(local_path, 'r', encoding='utf-8') as f:
+                                            content = f.read()
+                                        m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+                                        local_ver = m.group(1).strip() if m else "1.0.0"
+                                        if self.is_newer_version(cloud_ver, local_ver):
+                                            pkg_updates.append(pkg)
+                                    except:
+                                        pass
+                        
+                        if pkg_updates:
+                            updates_found = True
+                            info_msg += "\x1b[36;1m═══ Package Updates Available ═══\x1b[0m\r\n"
+                            for pkg in pkg_updates:
+                                info_msg += f"\x1b[32m• {pkg}\x1b[0m\r\n"
+                            info_msg += "\r\n\x1b[36mRun \x1b[32;1mvpm update-all\x1b[36m to update all packages\x1b[0m\r\n\r\n"
+        except:
+            pass  # Silently fail if package check fails
+        
+        # Only show update commands if updates were found
+        if updates_found:
+            info_msg += "\x1b[36;1m═══ Update Commands ═══\x1b[0m\r\n"
+            info_msg += "\x1b[32;1mvpm upgrade\x1b[0m         - Update the terminal application\r\n"
+            info_msg += "\x1b[32;1mvpm update-all\x1b[0m     - Update all installed packages\r\n"
+            info_msg += "\x1b[32;1mvpm list\x1b[0m            - Browse available packages\r\n"
+            info_msg += "\x1b[32;1mvpm info <package>\x1b[0m  - Get package details\r\n"
+            
+            self.insert_ansi_text(info_msg)
+    
     def is_newer_version(self, cloud_ver, local_ver):
         """Check if cloud version is newer than local version"""
         try:
@@ -1220,42 +1157,10 @@ class TerminalSession(QWidget):
             self.run_control_sequence("\r")
             return
 
-        # vpm local — show only installed packages
-        if cmd_strip == "vpm local":
-            self.render_vpm_local()
-            self.run_control_sequence("\r")
-            return
-
-        # vpm search <query>
-        if cmd_strip.startswith("vpm search "):
-            self.render_vpm_search(cmd_strip[11:].strip())
-            self.run_control_sequence("\r")
-            return
-
         # Power-Up: Detailed Package Info Interceptor
         if cmd_strip.startswith("vpm info "):
             pkg_name = cmd_strip[9:].strip()
             self.render_vpm_info(pkg_name)
-            self.run_control_sequence("\r")
-            return
-
-        # velora — system dashboard
-        if cmd_strip == "velora":
-            self.render_velora_dashboard()
-            self.run_control_sequence("\r")
-            return
-
-        # vpm ui — open graphical Package Manager
-        if cmd_strip == "vpm ui":
-            self.open_package_manager_ui()
-            self.run_control_sequence("\r")
-            return
-
-        # vpm check — manual update scan
-        if cmd_strip == "vpm check":
-            self.insert_ansi_text("\r\n\x1b[33;1m⏳ Checking for updates...\x1b[0m\r\n")
-            QApplication.processEvents()
-            self._start_async_update_check(manual=True)
             self.run_control_sequence("\r")
             return
 
@@ -1265,6 +1170,8 @@ class TerminalSession(QWidget):
             self.insert_ansi_text("\x1b[36mTo update this standalone executable:\x1b[0m\r\n")
             self.insert_ansi_text(f"\x1b[36m1. Run \x1b[32;1mvpm build\x1b[36m if you have the source code.\x1b[0m\r\n")
             self.insert_ansi_text(f"\x1b[36m2. Download the latest release from: \x1b[32;1m{__website__}/releases\x1b[0m\r\n\n")
+            
+            # Trigger the standard prompt so the user isn't stuck
             self.run_control_sequence("\r")
             return
 
@@ -1293,220 +1200,91 @@ class TerminalSession(QWidget):
             self.insert_ansi_text(f"\x1b[31;1mError:\x1b[0m Could not sync registry: {e}\r\n")
             return False
 
-    def _vpm_load_cache(self):
-        """Load the VPM cache, syncing if missing. Returns dict or None."""
+    def render_vpm_list(self):
         cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
         if not os.path.exists(cache_path):
             if not self.sync_registry():
-                return None
+                return
+
         try:
             with open(cache_path, 'r') as f:
-                return json.load(f)
-        except Exception:
-            self.insert_ansi_text("\r\n\x1b[31;1mError:\x1b[0m Could not parse registry cache.\r\n")
-            return None
-
-    def _vpm_is_installed(self, pkg):
-        return os.path.exists(os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py"))
-
-    def _vpm_local_ver(self, pkg):
-        """Return locally installed version string or None."""
-        path = os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py")
-        if not os.path.exists(path):
-            return None
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-            return m.group(1).strip() if m else '?'
-        except Exception:
-            return '?'
-
-    def render_vpm_list(self):
-        cloud_data = self._vpm_load_cache()
-        if cloud_data is None:
+                cloud_data = json.load(f)
+        except:
+            self.insert_ansi_text("\r\n\x1b[31;1mError:\x1b[0m Could not parse the package registry cache.\r\n")
             return
 
-        official, community = [], []
+        user_core_dir = os.path.expanduser("~/.velora/core")
+        official = []
+        community = []
+
         for pkg, info in cloud_data.items():
             if not isinstance(info, dict): continue
-            if '✅' in info.get('description', ''):
+            if "✅" in info.get('description', ''):
                 official.append((pkg, info))
             else:
                 community.append((pkg, info))
+
         official.sort()
         community.sort()
 
-        installed_count = sum(1 for p, _ in official + community if self._vpm_is_installed(p))
-        W = 74
+        self.insert_ansi_text("\r\n\x1b[38;5;51m\x1b[1m⚡ VELORA CLOUD REGISTRY \x1b[0m\x1b[90m(Package Manager)\x1b[0m\r\n\n")
 
-        out = []
-        out.append(f"\r\n\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        out.append(f"  \x1b[38;5;51;1m⚡ VELORA PACKAGE MANAGER\x1b[0m  "
-                   f"\x1b[90m{len(cloud_data)} packages  │  "
-                   f"\x1b[32m{installed_count} installed\x1b[0m\r\n")
-        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n\n")
-
-        def render_section(title, items, col, icon):
-            out.append(f"  {col}{icon} {title}\x1b[0m\r\n")
-            out.append(f"  \x1b[90m{'─'*70}\x1b[0m\r\n")
-            hdr = (f"  \x1b[90m{'PACKAGE':<16}{'VERSION':<10}"
-                   f"{'LOCAL':<10}{'STATUS':<13}AUTHOR\x1b[0m\r\n")
-            out.append(hdr)
+        def render_section(title, items, pkg_color, icon=""):
+            self.insert_ansi_text(f" \x1b[1m{icon} {title}\x1b[0m\r\n")
+            self.insert_ansi_text(f" \x1b[90m" + "─" * 75 + "\x1b[0m\r\n")
             for pkg, info in items:
-                ver     = info.get('version', '?')
-                author  = info.get('author', '?')[:18]
-                installed = self._vpm_is_installed(pkg)
-                lver    = self._vpm_local_ver(pkg) if installed else '—'
-                badge   = "\x1b[42;30;1m INSTALLED \x1b[0m" if installed else "\x1b[100;37m AVAILABLE \x1b[0m"
-                # version mismatch highlight
-                lver_col = ("\x1b[33m" if lver not in ('—','?') and lver != ver else "\x1b[90m")
-                out.append(
-                    f"  {col}◆ {pkg:<14}\x1b[0m "
-                    f"\x1b[36mv{ver:<9}\x1b[0m "
-                    f"{lver_col}{lver:<9}\x1b[0m "
-                    f"{badge} \x1b[33m{author}\x1b[0m\r\n"
-                )
-            out.append("\r\n")
+                version = info.get('version', '1.0.0')
+                author = info.get('author', 'Unknown')
+                desc = info.get('description', '').replace('✅', '').strip()
+                desc = (desc[:60] + '..') if len(desc) > 60 else desc
+                is_installed = os.path.exists(os.path.join(user_core_dir, f"{pkg}.py"))
+                
+                status_badge = "\x1b[42;30m INSTALLED \x1b[0m" if is_installed else "\x1b[100;37m AVAILABLE \x1b[0m"
+                
+                self.insert_ansi_text(f" {pkg_color}◆ {pkg:<15}\x1b[0m \x1b[90mv{version:<8}\x1b[0m {status_badge} \x1b[90mby\x1b[0m \x1b[33m{author[:18]:<18}\x1b[0m\r\n")
+                self.insert_ansi_text(f"   \x1b[97m{desc}\x1b[0m\r\n\n")
 
         if official:
-            render_section("Verified Official Suite", official, "\x1b[36;1m", "🛡️ ")
+            render_section("Verified Official Suite", official, "\x1b[36;1m", "🛡️")
+        
         if community:
             render_section("Community Registry", community, "\x1b[32;1m", "🌍")
 
-        out.append(f"\x1b[90m  Tip: vpm info <pkg> │ vpm local │ vpm search <query> │ vpm install <pkg>\x1b[0m\r\n")
-        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        self.insert_ansi_text("".join(out))
-
-    def render_vpm_local(self):
-        """Show only locally installed packages with version info."""
-        cloud_data = self._vpm_load_cache() or {}
-        user_core  = os.path.expanduser("~/.velora/core")
-        if not os.path.isdir(user_core):
-            self.insert_ansi_text("\r\n\x1b[33mNo packages installed yet.\x1b[0m\r\n")
-            return
-
-        installed = []
-        for f in sorted(os.listdir(user_core)):
-            if not f.endswith('.py'): continue
-            pkg  = f[:-3]
-            lver = self._vpm_local_ver(pkg) or '?'
-            cver = cloud_data.get(pkg, {}).get('version', '?') if isinstance(cloud_data.get(pkg), dict) else '?'
-            upd  = self.is_newer_version(cver, lver) if cver != '?' and lver != '?' else False
-            installed.append((pkg, lver, cver, upd))
-
-        W = 60
-        out = []
-        out.append(f"\r\n\x1b[32;1m{'━'*W}\x1b[0m\r\n")
-        out.append(f"  \x1b[32;1m📦 INSTALLED PACKAGES  \x1b[90m({len(installed)} total)\x1b[0m\r\n")
-        out.append(f"\x1b[32;1m{'━'*W}\x1b[0m\r\n")
-        out.append(f"  \x1b[90m{'PACKAGE':<18}{'LOCAL':<12}{'CLOUD':<12}STATUS\x1b[0m\r\n")
-        out.append(f"  \x1b[90m{'─'*56}\x1b[0m\r\n")
-        for pkg, lv, cv, upd in installed:
-            status = "\x1b[33m⬆  update\x1b[0m" if upd else "\x1b[32m✔  latest\x1b[0m"
-            out.append(f"  \x1b[36m◆ {pkg:<16}\x1b[0m \x1b[97mv{lv:<11}\x1b[0m \x1b[90mv{cv:<11}\x1b[0m {status}\r\n")
-        out.append(f"\x1b[32;1m{'━'*W}\x1b[0m\r\n")
-        self.insert_ansi_text("".join(out))
-
-    def render_vpm_search(self, query):
-        """Search the registry by package name or description."""
-        cloud_data = self._vpm_load_cache()
-        if cloud_data is None or not query:
-            return
-        q = query.lower()
-        matches = [(pkg, info) for pkg, info in cloud_data.items()
-                   if isinstance(info, dict) and
-                   (q in pkg.lower() or q in info.get('description','').lower())]
-        matches.sort()
-
-        out = []
-        out.append(f"\r\n\x1b[35;1m🔍 Search: \"{query}\" — {len(matches)} result(s)\x1b[0m\r\n")
-        out.append(f"  \x1b[90m{'─'*70}\x1b[0m\r\n")
-        if not matches:
-            out.append("  \x1b[90mNo packages matched your query.\x1b[0m\r\n")
-        for pkg, info in matches:
-            ver     = info.get('version','?')
-            desc    = info.get('description','').replace('✅','').strip()
-            desc    = desc[:65]+'..' if len(desc)>65 else desc
-            installed = self._vpm_is_installed(pkg)
-            badge   = "\x1b[42;30m INSTALLED \x1b[0m" if installed else "\x1b[100;37m AVAILABLE \x1b[0m"
-            out.append(f"  \x1b[35;1m◆ {pkg:<16}\x1b[0m \x1b[36mv{ver}\x1b[0m  {badge}\r\n")
-            out.append(f"    \x1b[90m{desc}\x1b[0m\r\n")
-        out.append(f"  \x1b[90m{'─'*70}\x1b[0m\r\n")
-        self.insert_ansi_text("".join(out))
+        self.insert_ansi_text(f"\x1b[90m Total: {len(cloud_data)} packages  │  Use 'vpm info <pkg>' for details\x1b[0m\r\n")
 
     def render_vpm_info(self, pkg_name):
-        cloud_data = self._vpm_load_cache()
-        if cloud_data is None: return
-        if pkg_name not in cloud_data:
-            self.insert_ansi_text(f"\r\n\x1b[31;1mError:\x1b[0m Package '{pkg_name}' not found.\r\n")
+        cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
+        if not os.path.exists(cache_path):
+            if not self.sync_registry():
+                return
+
+        try:
+            with open(cache_path, 'r') as f:
+                data = json.load(f)
+        except: return
+
+        if pkg_name not in data:
+            self.insert_ansi_text(f"\r\n\x1b[31;1mError:\x1b[0m Package '{pkg_name}' not found in registry.\r\n")
             return
-        info = cloud_data[pkg_name]
-        ver   = info.get('version','?')
-        lver  = self._vpm_local_ver(pkg_name)
-        installed = self._vpm_is_installed(pkg_name)
-        desc  = info.get('description','No description.').replace('✅','').strip()
-        W = 62
-        out = []
-        out.append(f"\r\n\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        out.append(f"  \x1b[38;5;51;1m📦 {pkg_name.upper()}\x1b[0m  \x1b[90mv{ver}\x1b[0m\r\n")
-        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        out.append(f"  \x1b[36mAuthor\x1b[0m      {info.get('author','?')}\r\n")
+
+        info = data[pkg_name]
+        self.insert_ansi_text(f"\r\n\x1b[38;5;51m\x1b[1m📦 {pkg_name.upper()} \x1b[0m\x1b[90mv{info.get('version', '1.0.0')}\x1b[0m\r\n")
+        self.insert_ansi_text(f" \x1b[90m" + "═" * 60 + "\x1b[0m\r\n")
+        
+        self.insert_ansi_text(f" \x1b[36mAuthor:\x1b[0m      \x1b[97m{info.get('author', 'Anonymous')}\x1b[0m\r\n")
+        
         if info.get('website'):
-            out.append(f"  \x1b[36mWebsite\x1b[0m     \x1b[34;4m{info['website']}\x1b[0m\r\n")
-        out.append(f"  \x1b[36mCloud ver\x1b[0m   v{ver}\r\n")
-        if installed:
-            upd = self.is_newer_version(ver, lver) if lver else False
-            out.append(f"  \x1b[36mLocal ver\x1b[0m   "
-                       f"\x1b[{'33' if upd else '32'}mv{lver}\x1b[0m"
-                       f"{' \x1b[33m(update available)\x1b[0m' if upd else ''}\r\n")
-        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
-        out.append(f"  \x1b[97m{desc}\x1b[0m\r\n")
-        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
-        if installed:
-            out.append(f"  \x1b[42;30;1m INSTALLED \x1b[0m  \x1b[32mReady to use  ·  "
-                       f"\x1b[90mRemove: vpm remove {pkg_name}\x1b[0m\r\n")
+            self.insert_ansi_text(f" \x1b[36mWebsite:\x1b[0m     \x1b[34;4m{info.get('website')}\x1b[0m\r\n")
+            
+        desc = info.get('description', 'No description provided.').replace('✅', '').strip()
+        self.insert_ansi_text(f" \x1b[36mDescription:\x1b[0m \x1b[97m{desc}\x1b[0m\r\n")
+        
+        self.insert_ansi_text(f" \x1b[90m" + "─" * 60 + "\x1b[0m\r\n")
+        is_installed = os.path.exists(os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg_name}.py"))
+        if is_installed:
+            self.insert_ansi_text(f" \x1b[42;30m\x1b[1m INSTALLED \x1b[0m  \x1b[32mReady to use\x1b[0m\r\n\n")
         else:
-            out.append(f"  \x1b[100;37m AVAILABLE \x1b[0m  "
-                       f"\x1b[90mInstall: \x1b[33mvpm install {pkg_name}\x1b[0m\r\n")
-        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        self.insert_ansi_text("".join(out))
-
-    def render_velora_dashboard(self):
-        """Show a compact Velora system dashboard."""
-        import datetime
-        cloud_data = self._vpm_load_cache() or {}
-        user_core  = os.path.expanduser("~/.velora/core")
-        installed_count = sum(1 for f in os.listdir(user_core) if f.endswith('.py')) if os.path.isdir(user_core) else 0
-        W = 62
-        now = datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
-        out = []
-        out.append(f"\r\n\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        out.append(f"  \x1b[38;5;51;1m⚡ VELORA TERMINAL\x1b[0m  \x1b[90mv{__version__}\x1b[0m\r\n")
-        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        out.append(f"  \x1b[36mPlatform\x1b[0m     \x1b[97m{platform.system()} {platform.release()}\x1b[0m\r\n")
-        out.append(f"  \x1b[36mArch\x1b[0m         \x1b[97m{platform.machine()}\x1b[0m\r\n")
-        out.append(f"  \x1b[36mPython\x1b[0m       \x1b[97m{sys.version.split()[0]}\x1b[0m\r\n")
-        out.append(f"  \x1b[36mTime\x1b[0m         \x1b[97m{now}\x1b[0m\r\n")
-        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
-        out.append(f"  \x1b[36mPackages\x1b[0m     \x1b[32m{installed_count} installed\x1b[0m  \x1b[90m/ {len(cloud_data)} in registry\x1b[0m\r\n")
-        out.append(f"  \x1b[36mCore dir\x1b[0m     \x1b[90m{user_core}\x1b[0m\r\n")
-        out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
-        out.append(f"  \x1b[90mvpm list  │  vpm local  │  vpm ui  │  vpm check\x1b[0m\r\n")
-        out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
-        self.insert_ansi_text("".join(out))
-
-    def open_package_manager_ui(self):
-        """Open the graphical Package Manager dialog."""
-        self.insert_ansi_text(
-            "\r\n\x1b[38;5;51;1m📦 Opening Velora Package Manager UI...\x1b[0m\r\n")
-        QApplication.processEvents()
-        # Find the top-level TerminalApp window to use as parent
-        parent = self.window()
-        dlg = VeloraPackageManagerDialog(parent)
-        dlg.show()
-
-
+            self.insert_ansi_text(f" \x1b[100;37m AVAILABLE \x1b[0m  \x1b[90mInstall with: \x1b[33mvpm install {pkg_name}\x1b[0m\r\n\n")
 
     def toggle_search(self):
         if self.search_bar.isVisible():
@@ -1669,17 +1447,6 @@ class TerminalSession(QWidget):
 
     def handle_stdout(self):
         data = self.process.readAllStandardOutput().data().decode(errors='replace')
-        
-        # Intercept Window Title Change Sequences (OSC 0, 1, 2)
-        # \x1b]0;Title\x07 or \x1b]2;Title\x07
-        import re as _re
-        title_matches = _re.findall(r'\x1b\][012];([^\x07]+)\x07', data)
-        if title_matches:
-            new_title = title_matches[-1]
-            self.title_changed.emit(new_title)
-            # Remove the sequences from data so they don't print as garbage
-            data = _re.sub(r'\x1b\][012];[^\x07]+\x07', '', data)
-
         data = self.filter_echo(data)
         self.insert_ansi_text(data)
 
@@ -1959,8 +1726,6 @@ class TerminalSession(QWidget):
             self.output_area.insertPlainText(user_input)
 
 class TerminalSplitter(QSplitter):
-    title_changed = pyqtSignal(str)
-
     def __init__(self, settings, parent_app):
         super().__init__(Qt.Orientation.Horizontal)
         self.settings = settings
@@ -1972,15 +1737,9 @@ class TerminalSplitter(QSplitter):
         session.zoom_changed.connect(self.parent_app.handle_zoom)
         session.settings_requested.connect(self.parent_app.open_settings)
         session.session_closed.connect(lambda s=session: self.close_session(s))
-        session.title_changed.connect(lambda t, s=session: self.on_title_changed(s, t))
         self.addWidget(session)
         session.output_area.setFocus()
         return session
-
-    def on_title_changed(self, session, title):
-        # Bubble up the title of the first (primary) session
-        if self.indexOf(session) == 0:
-            self.title_changed.emit(title)
 
     def close_session(self, session):
         session.setParent(None)
@@ -2042,8 +1801,8 @@ class UpdateChecker(QThread):
                                 try:
                                     with open(local_path, 'r', encoding='utf-8') as f: content = f.read()
                                     m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-                                    local_ver = m.group(1).strip() if m else "0.0.0"
-                                except Exception: local_ver = "0.0.0"
+                                    local_ver = m.group(1).strip() if m else "1.0.0"
+                                except Exception: local_ver = "1.0.0"
                                 
                                 if self.is_newer(cloud_ver, local_ver):
                                     pkg_updates.append(pkg)
@@ -2060,667 +1819,54 @@ class UpdateChecker(QThread):
             return c_parts > l_parts
         except Exception: return cloud_ver != local_ver
 
-
-# ─────────────────────────────────────────────────────────────────
-#  VELORA PACKAGE MANAGER — Graphical UI Dialog
-# ─────────────────────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────────
-#  VELORA PACKAGE MANAGER — Graphical UI Dialog
-# ─────────────────────────────────────────────────────────────────
-class VeloraPackageManagerDialog(QDialog):
-    """Full graphical Package Manager for Velora Terminal."""
-
-    _STYLE = """
-    QDialog { background:#1a1b26; color:#c0caf5; }
-    #pm_sidebar { background:#16171f; border-right:1px solid #252638; }
-    #pm_header  { background:#16171f; border-bottom:1px solid #252638; }
-    #pm_search  { background:#1f2133; border:1px solid #3a3b55; border-radius:20px;
-                  color:#c0caf5; padding:8px 16px; font-size:13px; }
-    #pm_search:focus { border:1px solid #7aa2f7; }
-    QPushButton#pm_cat { background:transparent; color:#6272a4; border:none;
-        border-radius:8px; padding:10px 14px; text-align:left; font-size:13px; }
-    QPushButton#pm_cat:hover { background:#252638; color:#c0caf5; }
-    QPushButton#pm_cat_active { background:#252638; color:#7aa2f7; font-weight:bold;
-        border:none; border-left:3px solid #7aa2f7; border-radius:0px 8px 8px 0px;
-        padding:10px 14px; text-align:left; font-size:13px; }
-    #pm_card { background:#1f2133; border:1px solid #252638; border-radius:12px; }
-    #pm_card:hover { border:1px solid #3a4a6b; }
-    QPushButton#pm_install { background:#7aa2f7; color:#1a1b26; border:none;
-        border-radius:8px; padding:6px 18px; font-weight:bold; font-size:12px; }
-    QPushButton#pm_install:hover { background:#89b4fa; }
-    QPushButton#pm_remove  { background:transparent; color:#f38ba8;
-        border:1px solid #f38ba8; border-radius:8px; padding:6px 14px; font-size:12px; }
-    QPushButton#pm_remove:hover  { background:rgba(243,139,168,0.10); }
-    QPushButton#pm_update  { background:#f9e2af; color:#1a1b26; border:none;
-        border-radius:8px; padding:6px 14px; font-weight:bold; font-size:12px; }
-    QPushButton#pm_update:hover  { background:#ffd580; }
-    QPushButton#pm_sync    { background:#252638; color:#7aa2f7; border:1px solid #3a3b55;
-        border-radius:8px; padding:6px 14px; font-size:12px; }
-    QPushButton#pm_sync:hover    { background:#2d2f4a; }
-    QScrollBar:vertical { background:#1a1b26; width:8px; border-radius:4px; }
-    QScrollBar::handle:vertical { background:#2a2b3d; border-radius:4px; min-height:30px; }
-    QScrollBar::handle:vertical:hover { background:#3a3b55; }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Velora — Package Manager")
-        self.resize(960, 660)
-        self.setModal(False)
-        self.setStyleSheet(self._STYLE)
-        self._packages = {}
-        self._active_cat = "All"
-        self._build_ui()
-        self._load_cache()
-
-    def _build_ui(self):
-        root = QHBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        # ── Sidebar ─────────────────────────────────────
-        sb = QWidget()
-        sb.setObjectName("pm_sidebar")
-        sb.setFixedWidth(190)
-        sbl = QVBoxLayout(sb)
-        sbl.setContentsMargins(10, 20, 10, 12)
-        sbl.setSpacing(4)
-        title = QLabel("📦  Packages")
-        title.setStyleSheet("font-size:16px;font-weight:800;color:#7aa2f7;margin-bottom:14px;")
-        sbl.addWidget(title)
-        self._cat_btns = {}
-        for cat in ["All", "Installed", "Updates", "Official", "Community"]:
-            b = QPushButton(cat)
-            b.setObjectName("pm_cat")
-            b.clicked.connect(lambda _, c=cat: self._set_cat(c))
-            sbl.addWidget(b)
-            self._cat_btns[cat] = b
-        sbl.addStretch()
-        self._sb_status = QLabel("")
-        self._sb_status.setStyleSheet("color:#6272a4;font-size:11px;padding:4px;")
-        self._sb_status.setWordWrap(True)
-        sbl.addWidget(self._sb_status)
-        root.addWidget(sb)
-
-        # ── Main ────────────────────────────────────────
-        main_w = QWidget()
-        main_l = QVBoxLayout(main_w)
-        main_l.setContentsMargins(0, 0, 0, 0)
-        main_l.setSpacing(0)
-
-        hdr = QWidget()
-        hdr.setObjectName("pm_header")
-        hdr.setFixedHeight(62)
-        hdrl = QHBoxLayout(hdr)
-        hdrl.setContentsMargins(16, 10, 16, 10)
-        self._search = QLineEdit()
-        self._search.setObjectName("pm_search")
-        self._search.setPlaceholderText("🔍  Search packages by name or description...")
-        self._search.textChanged.connect(self._refresh)
-        hdrl.addWidget(self._search)
-        sync_btn = QPushButton("⟳  Sync Registry")
-        sync_btn.setObjectName("pm_sync")
-        sync_btn.clicked.connect(self._sync)
-        hdrl.addWidget(sync_btn)
-        main_l.addWidget(hdr)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(scroll.Shape.NoFrame)
-        self._cards_w = QWidget()
-        self._cards_l = QVBoxLayout(self._cards_w)
-        self._cards_l.setContentsMargins(16, 14, 16, 14)
-        self._cards_l.setSpacing(10)
-        self._cards_l.addStretch()
-        scroll.setWidget(self._cards_w)
-        main_l.addWidget(scroll)
-        root.addWidget(main_w)
-
-        self._set_cat("All")
-
-    def _set_cat(self, cat):
-        self._active_cat = cat
-        for name, btn in self._cat_btns.items():
-            btn.setObjectName("pm_cat_active" if name == cat else "pm_cat")
-            btn.setStyleSheet("")
-        self._refresh()
-
-    # ── Helpers ──────────────────────────────────────────────────
-    def _is_installed(self, pkg):
-        return os.path.exists(
-            os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py"))
-
-    def _local_ver(self, pkg):
-        p = os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py")
-        if not os.path.exists(p):
-            return None
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                content = f.read()
-            if "# Velora Encrypted Source" in content or "__payload__" in content:
-                return "?"
-            m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-            return m.group(1) if m else "?"
-        except Exception:
-            return "?"
-
-    def _is_newer(self, cv, lv):
-        try:
-            return [int(x) for x in cv.split(".")] > [int(x) for x in lv.split(".")]
-        except Exception:
-            return False
-
-    # ── Data ─────────────────────────────────────────────────────
-    def _load_cache(self):
-        cache = os.path.expanduser("~/.velora/vpm_cache.json")
-        if os.path.exists(cache):
-            try:
-                with open(cache) as f:
-                    self._packages = json.load(f)
-            except Exception:
-                self._packages = {}
-        self._refresh()
-
-    def _sync(self):
-        self._sb_status.setText("Syncing…")
-        QApplication.processEvents()
-        try:
-            import ssl, urllib.request, time
-            pid, key = vpm.get_remote_credentials()
-            ctx = ssl._create_unverified_context()
-            req = urllib.request.Request(
-                f"https://sncloud.in/api/db/{pid}/packages.json?_t={int(time.time())}",
-                headers={"User-Agent": "Velora/1.0", "X-API-Key": key,
-                         "Cache-Control": "no-cache"})
-            with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
-                data = json.loads(r.read().decode())
-            if isinstance(data, dict):
-                self._packages = data
-                with open(os.path.expanduser("~/.velora/vpm_cache.json"), "w") as f:
-                    json.dump(data, f)
-            self._sb_status.setText(f"✔ Synced — {len(self._packages)} pkgs")
-        except Exception as e:
-            self._sb_status.setText(f"Sync error: {e}")
-        self._refresh()
-
-    # ── Card rendering ───────────────────────────────────────────
-    def _refresh(self):
-        while self._cards_l.count() > 1:
-            item = self._cards_l.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        q = self._search.text().lower()
-        cat = self._active_cat
-        shown = 0
-
-        for pkg, info in sorted(self._packages.items()):
-            if not isinstance(info, dict):
-                continue
-            installed  = self._is_installed(pkg)
-            lver       = self._local_ver(pkg) if installed else None
-            cver       = info.get("version", "?")
-            has_upd    = (installed and lver and lver != "?" and self._is_newer(cver, lver))
-            is_off     = "\u2705" in info.get("description", "")
-            desc_clean = info.get("description", "").replace("\u2705", "").strip()
-
-            if cat == "Installed" and not installed:  continue
-            if cat == "Updates"   and not has_upd:    continue
-            if cat == "Official"  and not is_off:     continue
-            if cat == "Community" and is_off:          continue
-            if q and q not in pkg.lower() and q not in desc_clean.lower():
-                continue
-
-            self._cards_l.insertWidget(
-                self._cards_l.count() - 1,
-                self._make_card(pkg, info, installed, lver, cver, has_upd, is_off, desc_clean))
-            shown += 1
-
-        self._sb_status.setText(f"{shown} package(s)")
-
-    def _make_card(self, pkg, info, installed, lver, cver, has_upd, is_off, desc_clean):
-        card = QWidget()
-        card.setObjectName("pm_card")
-        row = QHBoxLayout(card)
-        row.setContentsMargins(16, 14, 16, 14)
-        row.setSpacing(12)
-
-        # Info
-        ic = QVBoxLayout()
-        ic.setSpacing(5)
-        name_row = QHBoxLayout()
-        name_row.setSpacing(8)
-        name_row.addWidget(
-            QLabel(f"<b style='color:#c0caf5;font-size:14px'>{pkg}</b>"))
-
-        def badge(text, fg, bg):
-            lbl = QLabel(text)
-            lbl.setStyleSheet(
-                f"background:{bg};color:{fg};border-radius:5px;"
-                f"padding:1px 7px;font-size:11px;")
-            return lbl
-
-        if is_off:    name_row.addWidget(badge("\u2705 Official",  "#7aa2f7", "#1e3050"))
-        if installed: name_row.addWidget(badge("\u25cf Installed", "#a6e3a1", "#1a3025"))
-        if has_upd:   name_row.addWidget(
-            badge(f"\u2b06 {lver}\u2192{cver}", "#f9e2af", "#2e2400"))
-        name_row.addStretch()
-        ic.addLayout(name_row)
-
-        author = info.get("author", "?")
-        ic.addWidget(QLabel(
-            f"<span style='color:#6272a4'>v{cver}  \u00b7  by {author}</span>"))
-
-        short = desc_clean[:95] + "\u2026" if len(desc_clean) > 95 else desc_clean
-        dl = QLabel(f"<span style='color:#8892b0'>{short}</span>")
-        dl.setWordWrap(True)
-        ic.addWidget(dl)
-        row.addLayout(ic, 1)
-
-        # Buttons
-        bc = QVBoxLayout()
-        bc.setSpacing(6)
-        bc.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        if installed:
-            if has_upd:
-                ub = QPushButton("\u2b06 Update")
-                ub.setObjectName("pm_update")
-                ub.clicked.connect(lambda _, p=pkg: self._act("update", p))
-                bc.addWidget(ub)
-            rb = QPushButton("Remove")
-            rb.setObjectName("pm_remove")
-            rb.clicked.connect(lambda _, p=pkg: self._act("remove", p))
-            bc.addWidget(rb)
-        else:
-            ib = QPushButton("\u2b07 Install")
-            ib.setObjectName("pm_install")
-            ib.clicked.connect(lambda _, p=pkg: self._act("install", p))
-            bc.addWidget(ib)
-        row.addLayout(bc)
-        return card
-
-    def _act(self, action, pkg):
-        self._sb_status.setText(f"Running vpm {action} {pkg}\u2026")
-        QApplication.processEvents()
-        try:
-            import subprocess
-            base = getattr(sys, "_MEIPASS",
-                           os.path.dirname(os.path.abspath(sys.argv[0])))
-            if getattr(sys, "frozen", False):
-                cmd = [sys.executable, "--run-core", "vpm", action, pkg]
-            else:
-                cmd = [sys.executable,
-                       os.path.join(base, "terminal.py"),
-                       "--run-core", "vpm", action, pkg]
-            subprocess.run(cmd, timeout=60)
-            self._sb_status.setText(f"\u2714 vpm {action} {pkg}")
-        except Exception as e:
-            self._sb_status.setText(f"Error: {e}")
-        self._load_cache()
-
-
-# ─────────────────────────────────────────────────────────────────
-#  Custom Tab Bar Widgets for Platform-Specific Title Bar
-# ─────────────────────────────────────────────────────────────────
-
-class _TabPill(QPushButton):
-    """A single pill-shaped tab button."""
-    close_requested = pyqtSignal()
-
-    def __init__(self, label, parent=None):
-        super().__init__(parent)
-        self.setText(label)
-        self.setCheckable(True)
-        self._close_hovered = False
-
-    def paintEvent(self, event):
-        # Delegate to parent for the button look
-        super().paintEvent(event)
-
-    def mousePressEvent(self, event):
-        # Detect click on the close region (right 18px)
-        if event.button() == Qt.MouseButton.LeftButton:
-            if event.position().x() > self.width() - 20:
-                self.close_requested.emit()
-                return
-        super().mousePressEvent(event)
-
-
-class _CustomTabBar(QWidget):
-    """Horizontal row of pill tabs + a '+' new-tab button."""
-    tab_switched = pyqtSignal(int)
-    tab_close_requested = pyqtSignal(int)
-    new_tab_requested = pyqtSignal()
-
-    _TAB_STYLE = """
-    QPushButton {
-        background: rgba(255,255,255,0.06);
-        color: rgba(200,210,240,0.50);
-        border: 1px solid rgba(255,255,255,0.03);
-        border-radius: 6px;
-        padding: 6px 30px 6px 12px;
-        font-size: 12px;
-        font-weight: 500;
-        min-width: 100px;
-        max-width: 220px;
-        text-align: left;
-    }
-    QPushButton:hover {
-        background: rgba(255,255,255,0.10);
-        color: rgba(200,210,240,0.85);
-        border: 1px solid rgba(255,255,255,0.08);
-    }
-    QPushButton:checked {
-        background: rgba(255,255,255,0.15);
-        color: #ffffff;
-        font-weight: 600;
-        border: 1px solid rgba(255,255,255,0.12);
-    }
-    QPushButton#new_tab_btn {
-        background: transparent;
-        color: rgba(200,210,240,0.50);
-        border: none;
-        border-radius: 6px;
-        padding: 5px 10px;
-        font-size: 16px;
-        min-width: 32px;
-        max-width: 32px;
-    }
-    QPushButton#new_tab_btn:hover {
-        background: rgba(255,255,255,0.10);
-        color: #ffffff;
-    }
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet(self._TAB_STYLE)
-        self._tabs = []   # list of _TabPill
-        self._tab_widget = None
-        self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(4, 4, 4, 4)
-        self._layout.setSpacing(3)
-        self._layout.addStretch()
-        self._new_btn = QPushButton("+")
-        self._new_btn.setObjectName("new_tab_btn")
-        self._new_btn.setToolTip("New Tab  (Ctrl+T)")
-        self._new_btn.clicked.connect(self.new_tab_requested)
-        self._layout.addWidget(self._new_btn)
-
-    def set_tab_widget(self, tw):
-        self._tab_widget = tw
-        tw.currentChanged.connect(self._sync_selection)
-
-    def add_tab(self, label):
-        idx = len(self._tabs)
-        btn = _TabPill(f"  {label}  ×")
-        btn.setCheckable(True)
-        btn.clicked.connect(lambda _, i=idx: self._switch(i))
-        btn.close_requested.connect(lambda i=idx: self.tab_close_requested.emit(i))
-        # Re-bind indices dynamically
-        btn._tab_idx = idx
-        self._tabs.append(btn)
-        # Insert before stretch + new_btn
-        insert_pos = self._layout.count() - 2  # before stretch and new_btn
-        self._layout.insertWidget(insert_pos, btn)
-        self._sync_selection(len(self._tabs) - 1)
-
-    def remove_tab(self, idx):
-        if 0 <= idx < len(self._tabs):
-            btn = self._tabs.pop(idx)
-            self._layout.removeWidget(btn)
-            btn.deleteLater()
-            # Re-wire remaining tabs
-            for i, b in enumerate(self._tabs):
-                b._tab_idx = i
-                try: b.clicked.disconnect()
-                except Exception: pass
-                try: b.close_requested.disconnect()
-                except Exception: pass
-                b.clicked.connect(lambda _, ii=i: self._switch(ii))
-                b.close_requested.connect(lambda ii=i: self.tab_close_requested.emit(ii))
-            if self._tabs:
-                self._sync_selection(min(idx, len(self._tabs) - 1))
-
-    def rename_tab(self, idx, label):
-        if 0 <= idx < len(self._tabs):
-            self._tabs[idx].setText(f"  {label}  ×")
-
-    def _switch(self, idx):
-        if self._tab_widget:
-            self._tab_widget.setCurrentIndex(idx)
-        self._sync_selection(idx)
-        self.tab_switched.emit(idx)
-
-    def _sync_selection(self, idx):
-        for i, btn in enumerate(self._tabs):
-            btn.setChecked(i == idx)
-
-
-class _TitleBar(QWidget):
-    """Custom frameless title bar for Linux/Windows with integrated pill tabs."""
-
-    _BAR_STYLE = """
-    #title_bar {
-        background: rgba(22, 24, 36, 0.98);
-        border-bottom: 1px solid rgba(88, 91, 112, 0.25);
-    }
-    QPushButton#win_btn {
-        background: transparent;
-        border: none;
-        color: rgba(200,210,240,0.55);
-        font-size: 14px;
-        padding: 4px 10px;
-        border-radius: 6px;
-        min-width: 28px;
-    }
-    QPushButton#win_btn:hover { background: rgba(255,255,255,0.10); color: #cdd6f4; }
-    QPushButton#win_close:hover { background: rgba(243,139,168,0.35); color: #f38ba8; }
-    QLabel#app_icon { padding: 0 6px; }
-    """
-
-    def __init__(self, main_win):
-        super().__init__(main_win)
-        self.main_win = main_win
-        self.setObjectName("title_bar")
-        self.setFixedHeight(40)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(self._BAR_STYLE)
-        self._drag_pos = None
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 0, 6, 0)
-        layout.setSpacing(4)
-
-        # App icon
-        icon_lbl = QLabel("⚡")
-        icon_lbl.setObjectName("app_icon")
-        icon_lbl.setStyleSheet("color:#7aa2f7;font-size:15px;")
-        layout.addWidget(icon_lbl)
-
-        # Tab bar
-        self.tab_bar = _CustomTabBar(self)
-        self.tab_bar.new_tab_requested.connect(main_win.new_tab)
-        self.tab_bar.tab_switched.connect(
-            lambda i: main_win.tabs.setCurrentIndex(i))
-        self.tab_bar.tab_close_requested.connect(main_win.close_tab)
-        layout.addWidget(self.tab_bar, 1)
-
-        # Spacer
-        layout.addStretch()
-
-        # Window controls
-        for sym, obj_name, slot in [
-            ("—", "win_btn", main_win.showMinimized),
-            ("⬜", "win_btn", self._toggle_max),
-            ("✕", "win_close", main_win.close),
-        ]:
-            btn = QPushButton(sym)
-            btn.setObjectName(obj_name)
-            btn.clicked.connect(slot)
-            layout.addWidget(btn)
-
-    def _toggle_max(self):
-        if self.main_win.isMaximized():
-            self.main_win.showNormal()
-        else:
-            self.main_win.showMaximized()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint()
-
-    def mouseMoveEvent(self, event):
-        if self._drag_pos and event.buttons() & Qt.MouseButton.LeftButton:
-            if self.main_win.isMaximized():
-                # If dragging while maximized, restore first and jump to mouse
-                self.main_win.showNormal()
-                # Offset drag_pos to center the window under mouse
-                self._drag_pos = QPoint(self.main_win.width() // 2, 20)
-            
-            delta = event.globalPosition().toPoint() - self._drag_pos
-            self.main_win.move(delta)
-
-    def mouseReleaseEvent(self, event):
-        self._drag_pos = None
-
-    def mouseDoubleClickEvent(self, event):
-        self._toggle_max()
-
-
-class _MacToolbarTabBar(_CustomTabBar):
-    """Tab bar variant styled for the macOS unified toolbar."""
-
-    _MAC_STYLE = """
-    QPushButton {
-        background: rgba(255,255,255,0.08);
-        color: rgba(200,210,240,0.55);
-        border: none;
-        border-radius: 8px;
-        padding: 5px 28px 5px 14px;
-        font-size: 12px;
-        font-weight: 500;
-        min-width: 90px;
-        max-width: 200px;
-        text-align: left;
-    }
-    QPushButton:hover  { background:rgba(255,255,255,0.13); color:rgba(200,210,240,0.85); }
-    QPushButton:checked { background:rgba(255,255,255,0.20); color:#cdd6f4; font-weight:700; }
-    QPushButton#new_tab_btn {
-        background:transparent; color:rgba(200,210,240,0.50); border:none;
-        border-radius:8px; padding:5px 10px; font-size:16px; min-width:28px; max-width:28px;
-    }
-    QPushButton#new_tab_btn:hover { background:rgba(255,255,255,0.12); color:#cdd6f4; }
-    """
-
-    def __init__(self, tab_widget, main_win):
-        super().__init__(main_win)
-        self.setStyleSheet(self._MAC_STYLE)
-        self.set_tab_widget(tab_widget)
-        self.new_tab_requested.connect(main_win.new_tab)
-        self.tab_switched.connect(lambda i: tab_widget.setCurrentIndex(i))
-        self.tab_close_requested.connect(main_win.close_tab)
-
-
 class TerminalApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setObjectName("MainWindow")
         self.setWindowTitle("Velora")
-
+        
         self.setup_core_wrappers()
-
+        
         icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'velora.png')
         self.setWindowIcon(QIcon(icon_path))
-        self.resize(960, 640)
+        self.resize(900, 600)
+
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setStyleSheet("background:transparent;")
 
         self.settings = QSettings("Velora", "Settings")
-        self._drag_pos = None  # for frameless drag on Linux/Windows
 
-        IS_MAC = sys.platform == "darwin"
+        self.central_container = QWidget()
+        self.central_container.setObjectName("MainContainer")
+        self.central_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.central_layout = QVBoxLayout(self.central_container)
+        self.central_layout.setContentsMargins(0, 0, 0, 0)
+        self.central_layout.setSpacing(0)
 
-        # ── macOS: unified title-bar toolbar holds the tabs ──────────────────
-        if IS_MAC:
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-            self.setStyleSheet("background:transparent;")
+        self.tabs = QTabWidget()
+        self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)           # drag-to-reorder tabs
+        self.tabs.setElideMode(Qt.TextElideMode.ElideRight)  # elide long names
+        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tabs.customContextMenuRequested.connect(self.show_tab_context_menu)
+        self.central_layout.addWidget(self.tabs)
+        self.setCentralWidget(self.central_container)
+        
+        self.add_tab_btn = QToolButton()
+        self.add_tab_btn.setText("+")
+        self.add_tab_btn.setToolTip("Open New Tab (Ctrl+T)")
+        self.add_tab_btn.clicked.connect(self.new_tab)
+        self.tabs.setCornerWidget(self.add_tab_btn, Qt.Corner.TopRightCorner)
 
-            # Unified toolbar — tabs will live here
-            self._title_toolbar = self.addToolBar("tabs")
-            self._title_toolbar.setMovable(False)
-            self._title_toolbar.setFloatable(False)
-            self._title_toolbar.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
-            self.setUnifiedTitleAndToolBarOnMac(True)
-
-            self.central_container = QWidget()
-            self.central_container.setObjectName("MainContainer")
-            self.central_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            self.central_layout = QVBoxLayout(self.central_container)
-            self.central_layout.setContentsMargins(0, 0, 0, 0)
-            self.central_layout.setSpacing(0)
-
-            self.tabs = QTabWidget()
-            self.tabs.setTabsClosable(True)
-            self.tabs.setMovable(True)
-            self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
-            self.tabs.tabCloseRequested.connect(self.close_tab)
-            self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            self.tabs.customContextMenuRequested.connect(self.show_tab_context_menu)
-            # Hide the built-in tab bar — we render tabs in the toolbar
-            self.tabs.tabBar().hide()
-            self.central_layout.addWidget(self.tabs)
-            self.setCentralWidget(self.central_container)
-
-            # Custom tab bar widget embedded in toolbar
-            self._mac_tab_bar = _MacToolbarTabBar(self.tabs, self)
-            self._title_toolbar.addWidget(self._mac_tab_bar)
-
-        # ── Linux / Windows: frameless window with custom title bar ──────────
-        else:
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-            self.setWindowFlags(
-                Qt.WindowType.FramelessWindowHint |
-                Qt.WindowType.Window
-            )
-            self.setStyleSheet("background:transparent;")
-
-            self.central_container = QWidget()
-            self.central_container.setObjectName("MainContainer")
-            self.central_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            self.central_layout = QVBoxLayout(self.central_container)
-            self.central_layout.setContentsMargins(0, 0, 0, 0)
-            self.central_layout.setSpacing(0)
-
-            # Custom title bar
-            self._title_bar = _TitleBar(self)
-            self.central_layout.addWidget(self._title_bar)
-
-            self.tabs = QTabWidget()
-            self.tabs.setTabsClosable(True)
-            self.tabs.setMovable(True)
-            self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
-            self.tabs.tabCloseRequested.connect(self.close_tab)
-            self.tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            self.tabs.customContextMenuRequested.connect(self.show_tab_context_menu)
-            # Hide built-in tab bar — title bar has our custom one
-            self.tabs.tabBar().hide()
-            self.central_layout.addWidget(self.tabs)
-            self.setCentralWidget(self.central_container)
-
-            # Wire the title bar's tab bar to the tab widget
-            self._title_bar.tab_bar.set_tab_widget(self.tabs)
-
-        # ── Shared setup ─────────────────────────────────────────────────────
         self.status_bar = self.statusBar()
         self.update_btn = QPushButton("  🔔 Updates Available  ")
         self.update_btn.setVisible(False)
         self.update_btn.clicked.connect(self.show_detailed_updates)
         self.status_bar.addPermanentWidget(self.update_btn)
-
+        
         self.update_status_bar(int(self.settings.value("font_size", 11)))
-
+        
         # Shortcuts
         self.shortcut_new_tab = QShortcut(QKeySequence("Ctrl+T"), self)
         self.shortcut_new_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
@@ -2729,7 +1875,7 @@ class TerminalApp(QMainWindow):
         self.shortcut_close_tab = QShortcut(QKeySequence("Ctrl+W"), self)
         self.shortcut_close_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self.shortcut_close_tab.activated.connect(self.handle_shortcut_ctrl_w)
-
+        
         self.shortcut_next_tab = QShortcut(QKeySequence("Ctrl+Tab"), self)
         self.shortcut_next_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self.shortcut_next_tab.activated.connect(self.next_tab)
@@ -2743,9 +1889,10 @@ class TerminalApp(QMainWindow):
         self.shortcut_fullscreen.activated.connect(self.toggle_fullscreen)
 
         self.tab_counter = 0
+
         self.new_tab()
         self.apply_theme()
-
+        
         self.update_checker = UpdateChecker()
         self.update_checker.update_notif.connect(self.show_update_notification)
         self.update_checker.start()
@@ -3022,36 +2169,10 @@ class TerminalApp(QMainWindow):
 
     def new_tab(self, *args):
         self.tab_counter += 1
-        label = f"❯_ Terminal {self.tab_counter}"
         splitter = TerminalSplitter(self.settings, self)
-        
-        # Connect title changes to update the tab label
-        # We find the index dynamically to handle closed/moved tabs
-        splitter.title_changed.connect(lambda t, s=splitter: self.update_tab_title_by_widget(s, t))
-        
-        idx = self.tabs.addTab(splitter, label)
+        idx = self.tabs.addTab(splitter, f" ❯_  Terminal {self.tab_counter}")
         self.tabs.setCurrentIndex(idx)
-        # Add pill to the custom tab bar
-        self._get_custom_tab_bar().add_tab(label)
-
-    def update_tab_title_by_widget(self, widget, title):
-        idx = self.tabs.indexOf(widget)
-        if idx != -1:
-            self.update_tab_title(idx, title)
-
-    def update_tab_title(self, index, title):
-        """Update tab label dynamically from terminal title sequences."""
-        if 0 <= index < self.tabs.count():
-            clean_title = title.strip()
-            if not clean_title: return
-            
-            # Preserve the icon prefix if present
-            current = self.tabs.tabText(index)
-            prefix = "❯_ " if "❯_" in current else "⚙ " if "⚙" in current else ""
-            full_label = f"{prefix}{clean_title}"
-            
-            self.tabs.setTabText(index, full_label)
-            self._get_custom_tab_bar().rename_tab(index, full_label)
+        # Focus is handled in TerminalSplitter.add_session()
 
     def close_tab_by_widget(self, widget):
         """Called by a TerminalSplitter when its last session exits.
@@ -3086,13 +2207,11 @@ class TerminalApp(QMainWindow):
 
         if self.tabs.count() > 1:
             self.tabs.removeTab(index)
-            self._get_custom_tab_bar().remove_tab(index)
             if widget is not None:
                 widget.deleteLater()
         elif force:
             # Last tab but shell exited — open a fresh tab so window stays open
             self.tabs.removeTab(index)
-            self._get_custom_tab_bar().remove_tab(index)
             if widget is not None:
                 widget.deleteLater()
             self.new_tab()
@@ -3100,15 +2219,7 @@ class TerminalApp(QMainWindow):
             # User explicitly closed the last tab — quit
             self.close()
 
-    def _get_custom_tab_bar(self):
-        """Return the active custom tab bar widget (platform-specific)."""
-        if sys.platform == "darwin":
-            return getattr(self, "_mac_tab_bar", None) or _CustomTabBar()
-        else:
-            return getattr(self, "_title_bar", _TitleBar(self)).tab_bar
-
     def close_current_tab(self, *args):
-
         self.close_tab(self.tabs.currentIndex())
         
     def next_tab(self, *args):
