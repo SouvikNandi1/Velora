@@ -1,4 +1,5 @@
-__version__ = "1.84.0"
+__version__ = "1.85.0"
+VERSION = "1.85.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -138,7 +139,7 @@ if hasattr(signal, 'SIGTTIN'):
     signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit, QScrollArea, QSizePolicy
-from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer
+from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer, QPoint
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon, QTextDocument, QAction
 import urllib.request
 import json
@@ -972,6 +973,7 @@ class TerminalSession(QWidget):
     zoom_changed = pyqtSignal(int)
     settings_requested = pyqtSignal()
     session_closed = pyqtSignal()
+    title_changed = pyqtSignal(str)
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -1670,6 +1672,17 @@ class TerminalSession(QWidget):
 
     def handle_stdout(self):
         data = self.process.readAllStandardOutput().data().decode(errors='replace')
+        
+        # Intercept Window Title Change Sequences (OSC 0, 1, 2)
+        # \x1b]0;Title\x07 or \x1b]2;Title\x07
+        import re as _re
+        title_matches = _re.findall(r'\x1b\][012];([^\x07]+)\x07', data)
+        if title_matches:
+            new_title = title_matches[-1]
+            self.title_changed.emit(new_title)
+            # Remove the sequences from data so they don't print as garbage
+            data = _re.sub(r'\x1b\][012];[^\x07]+\x07', '', data)
+
         data = self.filter_echo(data)
         self.insert_ansi_text(data)
 
@@ -1949,6 +1962,8 @@ class TerminalSession(QWidget):
             self.output_area.insertPlainText(user_input)
 
 class TerminalSplitter(QSplitter):
+    title_changed = pyqtSignal(str)
+
     def __init__(self, settings, parent_app):
         super().__init__(Qt.Orientation.Horizontal)
         self.settings = settings
@@ -1960,9 +1975,15 @@ class TerminalSplitter(QSplitter):
         session.zoom_changed.connect(self.parent_app.handle_zoom)
         session.settings_requested.connect(self.parent_app.open_settings)
         session.session_closed.connect(lambda s=session: self.close_session(s))
+        session.title_changed.connect(lambda t, s=session: self.on_title_changed(s, t))
         self.addWidget(session)
         session.output_area.setFocus()
         return session
+
+    def on_title_changed(self, session, title):
+        # Bubble up the title of the first (primary) session
+        if self.indexOf(session) == 0:
+            self.title_changed.emit(title)
 
     def close_session(self, session):
         session.setParent(None)
@@ -2379,39 +2400,41 @@ class _CustomTabBar(QWidget):
 
     _TAB_STYLE = """
     QPushButton {
-        background: rgba(255,255,255,0.07);
-        color: rgba(200,210,240,0.55);
-        border: none;
-        border-radius: 8px;
-        padding: 5px 28px 5px 14px;
+        background: rgba(255,255,255,0.06);
+        color: rgba(200,210,240,0.50);
+        border: 1px solid rgba(255,255,255,0.03);
+        border-radius: 6px;
+        padding: 6px 30px 6px 12px;
         font-size: 12px;
         font-weight: 500;
-        min-width: 90px;
-        max-width: 200px;
+        min-width: 100px;
+        max-width: 220px;
         text-align: left;
     }
     QPushButton:hover {
-        background: rgba(255,255,255,0.11);
-        color: rgba(200,210,240,0.80);
+        background: rgba(255,255,255,0.10);
+        color: rgba(200,210,240,0.85);
+        border: 1px solid rgba(255,255,255,0.08);
     }
     QPushButton:checked {
-        background: rgba(255,255,255,0.18);
-        color: #cdd6f4;
-        font-weight: 700;
+        background: rgba(255,255,255,0.15);
+        color: #ffffff;
+        font-weight: 600;
+        border: 1px solid rgba(255,255,255,0.12);
     }
     QPushButton#new_tab_btn {
         background: transparent;
         color: rgba(200,210,240,0.50);
         border: none;
-        border-radius: 8px;
+        border-radius: 6px;
         padding: 5px 10px;
         font-size: 16px;
-        min-width: 28px;
-        max-width: 28px;
+        min-width: 32px;
+        max-width: 32px;
     }
     QPushButton#new_tab_btn:hover {
-        background: rgba(255,255,255,0.12);
-        color: #cdd6f4;
+        background: rgba(255,255,255,0.10);
+        color: #ffffff;
     }
     """
 
@@ -2555,9 +2578,14 @@ class _TitleBar(QWidget):
 
     def mouseMoveEvent(self, event):
         if self._drag_pos and event.buttons() & Qt.MouseButton.LeftButton:
+            if self.main_win.isMaximized():
+                # If dragging while maximized, restore first and jump to mouse
+                self.main_win.showNormal()
+                # Offset drag_pos to center the window under mouse
+                self._drag_pos = QPoint(self.main_win.width() // 2, 20)
+            
             delta = event.globalPosition().toPoint() - self._drag_pos
-            self.main_win.move(self.main_win.pos() + delta)
-            self._drag_pos = event.globalPosition().toPoint()
+            self.main_win.move(delta)
 
     def mouseReleaseEvent(self, event):
         self._drag_pos = None
@@ -2999,10 +3027,34 @@ class TerminalApp(QMainWindow):
         self.tab_counter += 1
         label = f"❯_ Terminal {self.tab_counter}"
         splitter = TerminalSplitter(self.settings, self)
+        
+        # Connect title changes to update the tab label
+        # We find the index dynamically to handle closed/moved tabs
+        splitter.title_changed.connect(lambda t, s=splitter: self.update_tab_title_by_widget(s, t))
+        
         idx = self.tabs.addTab(splitter, label)
         self.tabs.setCurrentIndex(idx)
         # Add pill to the custom tab bar
         self._get_custom_tab_bar().add_tab(label)
+
+    def update_tab_title_by_widget(self, widget, title):
+        idx = self.tabs.indexOf(widget)
+        if idx != -1:
+            self.update_tab_title(idx, title)
+
+    def update_tab_title(self, index, title):
+        """Update tab label dynamically from terminal title sequences."""
+        if 0 <= index < self.tabs.count():
+            clean_title = title.strip()
+            if not clean_title: return
+            
+            # Preserve the icon prefix if present
+            current = self.tabs.tabText(index)
+            prefix = "❯_ " if "❯_" in current else "⚙ " if "⚙" in current else ""
+            full_label = f"{prefix}{clean_title}"
+            
+            self.tabs.setTabText(index, full_label)
+            self._get_custom_tab_bar().rename_tab(index, full_label)
 
     def close_tab_by_widget(self, widget):
         """Called by a TerminalSplitter when its last session exits.
