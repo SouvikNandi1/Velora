@@ -1,1 +1,0 @@
-([('Velora', '/Users/souvik/Documents/velora/dist/Velora', 'EXECUTABLE')],)
