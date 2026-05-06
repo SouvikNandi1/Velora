@@ -1,4 +1,4 @@
-__version__ = "1.80.0"
+__version__ = "1.81.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -1185,7 +1185,7 @@ class TerminalSession(QWidget):
             self.insert_ansi_text("\r\n\x1b[33;1m⏳ Synchronizing Velora Cloud Registry...\x1b[0m\r\n")
             QApplication.processEvents()
             
-            import vpm, ssl, urllib.request, json, time
+            import ssl, urllib.request, json, time
             project_id, api_key = vpm.get_remote_credentials()
             ctx = ssl._create_unverified_context()
             

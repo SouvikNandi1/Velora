@@ -9,7 +9,7 @@ import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-VERSION = "1.80.0"
+VERSION = "1.81.0"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
 INSTALL_DIR = os.path.expanduser("~/.velora/app")
 
@@ -170,8 +170,19 @@ def main():
     # Download latest repository zip
     zip_path = os.path.join(INSTALL_DIR, "velora.zip")
     try:
-        log_step("Downloading latest source from GitHub")
-        urllib.request.urlretrieve(REPO_URL, zip_path)
+        def download_progress(count, block_size, total_size):
+            if total_size > 0:
+                percent = int(count * block_size * 100 / total_size)
+                percent = min(100, max(0, percent))
+                bar_len = 25
+                filled = int(bar_len * percent / 100)
+                bar = '█' * filled + '░' * (bar_len - filled)
+                print(f"  \x1b[33m⏳\x1b[0m \x1b[90mDownloading latest source... \x1b[38;5;51m{bar}\x1b[0m \x1b[97m{percent}%\x1b[0m", end='\r', flush=True)
+            else:
+                downloaded = (count * block_size) / (1024 * 1024)
+                print(f"  \x1b[33m⏳\x1b[0m \x1b[90mDownloading latest source... \x1b[38;5;51m{downloaded:.2f} MB\x1b[0m" + " " * 10, end='\r', flush=True)
+
+        urllib.request.urlretrieve(REPO_URL, zip_path, reporthook=download_progress)
         
         import zipfile
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
