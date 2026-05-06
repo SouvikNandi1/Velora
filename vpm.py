@@ -1,4 +1,4 @@
-__version__ = "1.17.2"
+__version__ = "1.17.3"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -90,10 +90,11 @@ VPM_CACHE = os.path.expanduser("~/.velora/vpm_cache.json")
 
 def get_local_packages_dict():
     pkgs = {}
+    ignore = ('__init__.py', 'vpm.py', 'terminal.py', 'bootstrap.py', 'install.py', 'build.py', 'git.py')
     for d in (BUNDLED_CORE_DIR, USER_CORE_DIR):
         if not os.path.exists(d): continue
         for file in os.listdir(d):
-            if file.endswith('.py') and file not in ('__init__.py', 'vpm.py'):
+            if file.endswith('.py') and file not in ignore:
                 pkg = file[:-3]
                 pkgs[pkg] = os.path.join(d, file)
     return pkgs

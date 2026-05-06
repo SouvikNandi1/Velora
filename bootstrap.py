@@ -6,7 +6,7 @@ import shutil
 import urllib.request
 import base64
 
-VERSION = "1.76.0"
+VERSION = "1.78.0"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
 INSTALL_DIR = os.path.expanduser("~/.velora/app")
 

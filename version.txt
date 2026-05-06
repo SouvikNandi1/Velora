@@ -782,3 +782,8 @@ v1.77.0
 - Fixed a bug in `vpm publish-main` where it was incorrectly publishing root project files (bootstrap, build, terminal, install) instead of the programs inside the `core/` directory when running from source.
 - Refactored `vpm.py` directory resolution to correctly identify the `core/` subdirectory for bundled core programs.
 - Bumped VPM core version to `v1.17.2`.
+
+v1.78.0
+- Hardened `vpm.py` package discovery to explicitly ignore root-level system files (terminal, bootstrap, etc.) during package scanning.
+- Synchronized `bootstrap.py` versioning with the main terminal application.
+- Bumped VPM core version to `v1.17.3`.
