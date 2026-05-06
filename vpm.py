@@ -217,7 +217,47 @@ def list_packages():
     except Exception as e:
         print(f"\x1b[31;1mError fetching packages:\x1b[0m {e}")
 
+def get_cloud_packages():
+    """Returns a dictionary of packages from SNCloud for UI consumption."""
+    url = f"{get_base_url()}.json?_t={int(time.time())}"
+    try:
+        req = get_request(url)
+        with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            if not data or data == 'null': return {}
+            return data
+    except Exception:
+        return {}
+
+def get_local_packages_info():
+    """Returns a list of dictionaries with metadata for all local packages."""
+    pkgs_info = []
+    local_pkgs = get_local_packages_dict()
+    
+    for pkg, file_path in sorted(local_pkgs.items()):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                code = f.read()
+            v_m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+            a_m = re.search(r'^__author__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+            w_m = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+            d_m = re.search(r'^__description__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+            
+            pkgs_info.append({
+                "name": pkg,
+                "version": v_m.group(1) if v_m else "1.0.0",
+                "author": a_m.group(1) if a_m else "Unknown",
+                "website": w_m.group(1) if w_m else "",
+                "description": d_m.group(1) if d_m else "Local Velora program",
+                "path": file_path,
+                "type": "user" if USER_CORE_DIR in file_path else "bundled"
+            })
+        except Exception: pass
+        
+    return pkgs_info
+
 def list_local_packages():
+
     print("\n\x1b[36;1m═══ 📂 LOCAL INSTALLED PACKAGES ═══\x1b[0m")
     count = 0
     pkgs = get_local_packages_dict()

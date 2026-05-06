@@ -137,9 +137,9 @@ if hasattr(signal, 'SIGTTOU'):
 if hasattr(signal, 'SIGTTIN'):
     signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit, QScrollArea, QFrame, QGridLayout, QGraphicsDropShadowEffect
 from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer
-from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon, QTextDocument, QAction
+from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon, QTextDocument, QAction, QPainter, QLinearGradient
 import urllib.request
 import json
 import ssl
@@ -680,7 +680,290 @@ class TerminalDisplay(QPlainTextEdit):
                     cursor.setPosition(pos, QTextCursor.MoveMode.KeepAnchor)
                     self.setTextCursor(cursor)
 
+class VPMWorker(QThread):
+    finished = pyqtSignal(dict, list)
+
+    def run(self):
+        cloud = vpm.get_cloud_packages()
+        local = vpm.get_local_packages_info()
+        self.finished.emit(cloud, local)
+
+class VPMPackageCard(QFrame):
+    action_triggered = pyqtSignal(str, str) # action, pkg_name
+
+    def __init__(self, name, info, local_info, theme, parent=None):
+        super().__init__(parent)
+        self.name = name
+        self.info = info
+        self.theme = theme
+        self.setObjectName("PackageCard")
+        
+        self.local_ver = next((p['version'] for p in local_info if p['name'] == name), None)
+        self.cloud_ver = info.get('version', '1.0.0')
+        self.is_official = "✅" in info.get('description', '')
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(15, 15, 15, 15)
+        self.layout.setSpacing(8)
+        
+        # Header: Icon and Name
+        header = QHBoxLayout()
+        icon_lbl = QLabel("📦" if not self.is_official else "🛡️")
+        icon_lbl.setStyleSheet("font-size: 24px;")
+        header.addWidget(icon_lbl)
+        
+        name_lbl = QLabel(name)
+        name_lbl.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {theme['fg']};")
+        header.addWidget(name_lbl)
+        header.addStretch()
+        
+        if self.is_official:
+            badge = QLabel("OFFICIAL")
+            badge.setStyleSheet(f"background-color: {theme['sel']}; color: {theme['fg']}; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px;")
+            header.addWidget(badge)
+            
+        self.layout.addLayout(header)
+        
+        # Description
+        desc = info.get('description', '').replace('✅', '').strip()
+        desc_lbl = QLabel(desc)
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.7); font-size: 12px;")
+        self.layout.addWidget(desc_lbl)
+        
+        self.layout.addStretch()
+        
+        # Metadata
+        meta = QHBoxLayout()
+        author = info.get('author', 'Unknown')
+        ver_str = f"v{self.cloud_ver}"
+        if self.local_ver:
+            if self.local_ver != self.cloud_ver:
+                ver_str = f"v{self.local_ver} ➜ \x1b[32mv{self.cloud_ver}\x1b[0m" # Note: ANSI won't work in QLabel, use HTML
+                ver_str = f"<span style='color: gray;'>v{self.local_ver}</span> <span style='color: {theme['border']};'>➜</span> <span style='color: #50fa7b;'>v{self.cloud_ver}</span>"
+            else:
+                ver_str = f"<span style='color: #50fa7b;'>v{self.local_ver} (Latest)</span>"
+        
+        meta_lbl = QLabel(f"By {author}  •  {ver_str}")
+        meta_lbl.setStyleSheet(f"font-size: 10px; color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.5);")
+        meta.addWidget(meta_lbl)
+        self.layout.addLayout(meta)
+        
+        # Buttons
+        btn_box = QHBoxLayout()
+        if not self.local_ver:
+            self.main_btn = QPushButton("Install")
+            self.main_btn.setObjectName("InstallBtn")
+        elif self.local_ver != self.cloud_ver:
+            self.main_btn = QPushButton("Update")
+            self.main_btn.setObjectName("UpdateBtn")
+        else:
+            self.main_btn = QPushButton("Remove")
+            self.main_btn.setObjectName("RemoveBtn")
+            
+        self.main_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.main_btn.clicked.connect(self.on_btn_clicked)
+        btn_box.addWidget(self.main_btn)
+        
+        self.info_btn = QPushButton("ℹ")
+        self.info_btn.setFixedWidth(30)
+        self.info_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.info_btn.clicked.connect(lambda: self.action_triggered.emit("info", self.name))
+        btn_box.addWidget(self.info_btn)
+        
+        self.layout.addLayout(btn_box)
+        
+        self.apply_styles()
+
+    def apply_styles(self):
+        bg = f"rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.4)"
+        border = f"rgba({_hex_to_rgb_str(self.theme['border'])}, 0.3)"
+        sel = self.theme['sel']
+        fg = self.theme['fg']
+        
+        self.setStyleSheet(f"""
+            #PackageCard {{
+                background-color: {bg};
+                border: 1px solid {border};
+                border-radius: 12px;
+            }}
+            #PackageCard:hover {{
+                border: 1px solid {self.theme['border']};
+                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.6);
+            }}
+            QPushButton {{
+                background-color: {sel};
+                color: {fg};
+                border: none;
+                border-radius: 6px;
+                padding: 6px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {fg};
+                color: {self.theme['bg']};
+            }}
+            #RemoveBtn {{
+                background-color: rgba(255, 85, 85, 0.2);
+                color: #ff5555;
+                border: 1px solid rgba(255, 85, 85, 0.4);
+            }}
+            #RemoveBtn:hover {{
+                background-color: #ff5555;
+                color: white;
+            }}
+        """)
+
+    def on_btn_clicked(self):
+        action = self.main_btn.text().lower()
+        self.action_triggered.emit(action, self.name)
+
+class VPMTab(QWidget):
+    def __init__(self, settings, parent=None):
+        super().__init__(parent)
+        self.settings = settings
+        self.parent_app = parent
+        self.theme = THEMES.get(settings.value("theme", "Dracula (Dark)"), THEMES["Dracula (Dark)"])
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(30, 30, 30, 30)
+        self.layout.setSpacing(20)
+        
+        # Toolbar
+        toolbar = QHBoxLayout()
+        title = QLabel("Package Manager")
+        title.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {self.theme['fg']};")
+        toolbar.addWidget(title)
+        
+        toolbar.addStretch()
+        
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search packages...")
+        self.search_bar.setFixedWidth(250)
+        self.search_bar.textChanged.connect(self.filter_packages)
+        toolbar.addWidget(self.search_bar)
+        
+        self.refresh_btn = QPushButton("Refresh Registry")
+        self.refresh_btn.setFixedWidth(120)
+        self.refresh_btn.clicked.connect(self.refresh_data)
+        toolbar.addWidget(self.refresh_btn)
+        
+        self.layout.addLayout(toolbar)
+        
+        # Scroll Area
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("background: transparent; border: none;")
+        
+        self.container = QWidget()
+        self.container.setStyleSheet("background: transparent;")
+        self.grid = QGridLayout(self.container)
+        self.grid.setSpacing(15)
+        self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        
+        self.scroll.setWidget(self.container)
+        self.layout.addWidget(self.scroll)
+        
+        self.cards = []
+        self.refresh_data()
+
+    def refresh_data(self):
+        # Clear existing
+        for i in reversed(range(self.grid.count())): 
+            self.grid.itemAt(i).widget().setParent(None)
+        self.cards = []
+        
+        loading = QLabel("Fetching latest packages from SNCloud...")
+        loading.setStyleSheet(f"color: {self.theme['border']}; font-style: italic;")
+        self.grid.addWidget(loading, 0, 0)
+        
+        self.worker = VPMWorker()
+        self.worker.finished.connect(self.on_data_loaded)
+        self.worker.start()
+
+    def on_data_loaded(self, cloud_data, local_data):
+        # Clear loading
+        for i in reversed(range(self.grid.count())): 
+            self.grid.itemAt(i).widget().setParent(None)
+            
+        if not cloud_data:
+            err = QLabel("Failed to connect to SNCloud. Please check your internet connection.")
+            err.setStyleSheet("color: #ff5555;")
+            self.grid.addWidget(err, 0, 0)
+            return
+
+        # Sort: Official first, then name
+        sorted_pkgs = sorted(cloud_data.items(), key=lambda x: ("✅" not in x[1].get('description', ''), x[0]))
+        
+        row, col = 0, 0
+        cols_count = max(1, self.width() // 320)
+        
+        for name, info in sorted_pkgs:
+            card = VPMPackageCard(name, info, local_data, self.theme)
+            card.action_triggered.connect(self.handle_action)
+            self.cards.append(card)
+            self.grid.addWidget(card, row, col)
+            col += 1
+            if col >= cols_count:
+                col = 0
+                row += 1
+
+    def filter_packages(self, text):
+        text = text.lower()
+        # Hide all
+        for card in self.cards:
+            card.hide()
+            self.grid.removeWidget(card)
+            
+        # Filter and re-add
+        filtered = [c for c in self.cards if text in c.name.lower() or text in c.info.get('description', '').lower()]
+        
+        row, col = 0, 0
+        cols_count = max(1, self.width() // 320)
+        for card in filtered:
+            card.show()
+            self.grid.addWidget(card, row, col)
+            col += 1
+            if col >= cols_count:
+                col = 0
+                row += 1
+
+    def handle_action(self, action, pkg_name):
+        if action == "info":
+            # Just run the CLI command in a hidden way or show a dialog
+            # For now, let's just print to the active terminal if possible, 
+            # but better to show a dialog.
+            vpm.locate_package(pkg_name) # This prints, not ideal
+            return
+
+        # For install/update/remove, we'll run the command in the background
+        # and refresh when done.
+        confirm = QMessageBox.question(self, "Confirm Action", f"Are you sure you want to {action} '{pkg_name}'?")
+        if confirm == QMessageBox.StandardButton.Yes:
+            try:
+                if action == "install" or action == "update":
+                    vpm.install_package(pkg_name)
+                elif action == "remove":
+                    # Manually handle removal as vpm.py remove expects CLI args
+                    target = os.path.join(vpm.USER_CORE_DIR, f"{pkg_name}.py")
+                    lib_target = os.path.join(vpm.USER_CORE_DIR, f"{pkg_name}_lib")
+                    if os.path.exists(target): os.remove(target)
+                    if os.path.exists(lib_target): shutil.rmtree(lib_target)
+                    vpm.remove_wrapper(pkg_name)
+                
+                QMessageBox.information(self, "Success", f"Successfully {action}ed '{pkg_name}'!")
+                self.refresh_data()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to {action} '{pkg_name}': {e}")
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.cards:
+            self.filter_packages(self.search_bar.text())
+
 class SettingsTab(QWidget):
+
     settings_applied = pyqtSignal()
     history_cleared = pyqtSignal()
 
@@ -1857,7 +2140,19 @@ class TerminalApp(QMainWindow):
         self.add_tab_btn.setText("+")
         self.add_tab_btn.setToolTip("Open New Tab (Ctrl+T)")
         self.add_tab_btn.clicked.connect(self.new_tab)
-        self.tabs.setCornerWidget(self.add_tab_btn, Qt.Corner.TopRightCorner)
+        
+        self.vpm_btn = QToolButton()
+        self.vpm_btn.setText("📦")
+        self.vpm_btn.setToolTip("Package Manager (Ctrl+Shift+P)")
+        self.vpm_btn.clicked.connect(self.open_vpm)
+        
+        self.corner_widget = QWidget()
+        self.corner_layout = QHBoxLayout(self.corner_widget)
+        self.corner_layout.setContentsMargins(0, 0, 0, 0)
+        self.corner_layout.setSpacing(0)
+        self.corner_layout.addWidget(self.vpm_btn)
+        self.corner_layout.addWidget(self.add_tab_btn)
+        self.tabs.setCornerWidget(self.corner_widget, Qt.Corner.TopRightCorner)
 
         self.status_bar = self.statusBar()
         self.update_btn = QPushButton("  🔔 Updates Available  ")
@@ -1887,6 +2182,10 @@ class TerminalApp(QMainWindow):
         self.shortcut_fullscreen = QShortcut(QKeySequence("F11"), self)
         self.shortcut_fullscreen.setContext(Qt.ShortcutContext.ApplicationShortcut)
         self.shortcut_fullscreen.activated.connect(self.toggle_fullscreen)
+
+        self.shortcut_vpm = QShortcut(QKeySequence("Ctrl+Shift+P"), self)
+        self.shortcut_vpm.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.shortcut_vpm.activated.connect(self.open_vpm)
 
         self.tab_counter = 0
 
@@ -2386,6 +2685,17 @@ class TerminalApp(QMainWindow):
                 font-size: 12px;
             }}
         """)
+
+    def open_vpm(self):
+        # Jump to the VPM tab if it is already open
+        for i in range(self.tabs.count()):
+            if isinstance(self.tabs.widget(i), VPMTab):
+                self.tabs.setCurrentIndex(i)
+                return
+                
+        vpm_tab = VPMTab(self.settings, self)
+        idx = self.tabs.addTab(vpm_tab, " 📦  Packages")
+        self.tabs.setCurrentIndex(idx)
 
     def open_settings(self):
         # Jump to the settings tab if it is already open
