@@ -1,114 +1,121 @@
+# Velora Terminal
+
 <p align="center">
   <img src="src/velora.png" width="128" height="128" alt="Velora Logo">
 </p>
 
-<h1 align="center">Velora Terminal</h1>
+**Elevate your workflow with a modern terminal experience.**
 
-<p align="center">
-  <b>Elevate Your Workflow with a Next-Generation Terminal Experience.</b><br>
-  A high-fidelity PyQt6 terminal emulator featuring PTY isolation, glassmorphism UI, 
-  and a powerful cloud-integrated package manager.
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Version-1.77.0-bd93f9?style=for-the-badge" alt="Version">
-  <img src="https://img.shields.io/badge/Security-E2E_Hardening-50fa7b?style=for-the-badge" alt="Security">
-  <img src="https://img.shields.io/badge/Platform-Cross--Platform-8be9fd?style=for-the-badge" alt="Platform">
-</p>
+Velora is a PyQt6-powered terminal application with cloud-integrated package management, secure local execution, and a polished UI.
 
 ---
 
-## ✨ Key Features
+## 🚀 Highlights
 
-*   **🎨 Glassmorphism UI**: Stunning translucent backgrounds with dynamic opacity control and high-fidelity themes.
-*   **🛡️ Hardened Security**: Automatic end-to-end encryption of all local source code and history. No plaintext Python resides on your disk.
-*   **📦 Velora Package Manager (VPM)**: Instant access to a cloud-hosted registry of official and community-built terminal tools.
-*   **⚡ PTY Isolation**: True Pseudo-Terminal support for interactive CLI apps like `nano`, `vim`, and `htop`.
-*   **🛠️ Multi-Pane Workflow**: Native support for splitting tabs side-by-side or top-to-bottom.
-*   **🌐 Remote Bootstrapper**: Single-command installation and automatic desktop shortcut generation.
+- **Modern UI** with glassmorphism and theme support
+- **Cloud package management** via `vpm`
+- **Secure local files** using encrypted stubs
+- **True PTY support** for `nano`, `vim`, `htop`, and other interactive tools
+- **Local git helper** support with `git.py`
 
 ---
 
-## 🚀 Quick Start (One-Command Install)
+## 📥 Installation
 
-Velora is designed to be installed and launched via a single link command. Choose your operating system below:
+### Linux / macOS
 
-### 🐧 Linux & 🍎 macOS
-Open your terminal and run:
 ```bash
 curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3
 ```
 
-### 🪟 Windows
-Open **PowerShell** and run:
+### Windows (PowerShell)
+
 ```powershell
-curl -O bootstrap.py https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py; python bootstrap.py
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py
+python bootstrap.py
 ```
 
 ---
 
-## 📦 Managing Packages (VPM)
+## 📦 Package Management (`vpm`)
 
-Velora uses its own package manager to keep your environment lightweight. By default, the `core/` folder is empty. Use `vpm` to populate it with verified tools.
+Velora uses a cloud-backed package registry to keep the repo lightweight and secure.
 
 | Command | Description |
-| :--- | :--- |
-| `vpm list` | View all available packages in the Velora Cloud. |
-| `vpm install all` | **Recommended.** Installs the entire official verified suite. |
-| `vpm info <pkg>` | View detailed metadata and description for a package. |
-| `vpm check` | Check for updates for the terminal and your tools. |
-| `vpm upgrade` | Perform an over-the-air update of the main Terminal app. |
+| --- | --- |
+| `vpm list` | Show available packages from the Velora registry |
+| `vpm install <pkg>` | Install a package locally |
+| `vpm install all` | Install the full official suite |
+| `vpm info <pkg>` | Show package metadata and website |
+| `vpm check` | Check for available app and package updates |
+| `vpm upgrade` | Update the terminal app itself |
 
 ---
 
-## 🏗️ Technical Architecture
+## 🔒 Secrets & Configuration
 
-Velora is built on a modular, event-driven architecture designed for speed and security.
+Velora avoids storing secrets in plain text in the repository.
 
-*   **Loader Stub Engine**: All `.py` files are encrypted using XOR+Base64. The app runs via memory-only decryption, preventing code tampering.
-*   **PTY Proxy**: Intercepts OSC sequences for dynamic window resizing, ensuring `ncurses` apps scale perfectly.
-*   **TrueColor Core**: Full 24-bit ANSI rendering support for modern CLI aesthetics.
+Credentials may be provided by:
 
-For a deep dive, see the Blueprint Documentation.
+- `VELORA_SN_PROJECT_ID`
+- `VELORA_SN_API_KEY`
+- `~/.velora/vpm_secrets.json`
+
+A secure fallback is also included for embedded operation without exposing raw keys in source.
 
 ---
 
-## 🛠️ Development & Building
+## 🧰 Local Git Helper
 
-If you wish to build a standalone native executable (e.g., `.exe` on Windows), ensure you have the dependencies installed and run:
+A local helper script is available for faster commit and push workflows:
+
+```bash
+./git.py -m "Update to version vX.Y.Z"
+```
+
+If you omit `-m`, it generates a message from `version.txt`.
+
+> `git.py` is ignored by the repository and is only for local use.
+
+---
+
+## 🏗️ Build from Source
+
+To build a standalone executable:
 
 ```bash
 python install.py
 python build.py
 ```
 
-The build script will use `PyInstaller` to generate a secure, single-file binary that includes all required assets.
+This will package the application using `PyInstaller`.
 
 ---
 
-## 📂 Repository Structure
+## 📁 Repository Layout
 
 ```text
-├── bootstrap.py     # Remote deployment & hardening script
-├── terminal.py      # Main GUI application (Encrypted loader)
-├── vpm.py           # Velora Package Manager
-├── install.py       # Dependency setup utility
-├── build.py         # Native binary compilation script
-├── src/             # UI Assets & Logos
-├── blueprint.html   # Technical architecture docs
-└── help.html        # Core program documentation
+├── bootstrap.py      # Bootstrap installer and hardening script
+├── terminal.py       # Main GUI terminal app
+├── vpm.py            # Velora package manager
+├── git.py            # Local git helper (ignored by git)
+├── install.py        # Dependency setup utility
+├── build.py          # Packaging script
+├── src/              # UI assets and icons
+├── blueprint.html    # Architecture documentation
+├── help.html         # Core program docs
+└── version.txt       # Release version history
 ```
-*Note: The `core/` directory is omitted from Git to prioritize privacy and cloud-based distribution via VPM.*
+
+`core/` is intentionally excluded from version control and populated via VPM.
 
 ---
 
 ## 📜 License
 
-Proprietary Software. All rights reserved to **qelaro.in**. 
-Distributed "as-is" without warranty of any kind.
+Proprietary software. All rights reserved to **qelaro.in**.
 
 ---
 
-<p align="center">
-  Built with ❤️ by <b>Souvik</b>
-</p>
+Built with ❤️ by **Souvik**

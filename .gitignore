@@ -4,6 +4,9 @@
 # Ignore local core programs and generated files
 core/
 
+# Ignore local git helper
+git.py
+
 # Python cache
 __pycache__/
 *.pyc
