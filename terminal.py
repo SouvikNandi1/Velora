@@ -1,4 +1,4 @@
-__version__ = "1.83.1"
+__version__ = "1.84.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -1222,6 +1222,12 @@ class TerminalSession(QWidget):
             self.run_control_sequence("\r")
             return
 
+        # vpm ui — open graphical Package Manager
+        if cmd_strip == "vpm ui":
+            self.open_package_manager_ui()
+            self.run_control_sequence("\r")
+            return
+
         # vpm check — manual update scan
         if cmd_strip == "vpm check":
             self.insert_ansi_text("\r\n\x1b[33;1m⏳ Checking for updates...\x1b[0m\r\n")
@@ -1463,9 +1469,21 @@ class TerminalSession(QWidget):
         out.append(f"  \x1b[36mPackages\x1b[0m     \x1b[32m{installed_count} installed\x1b[0m  \x1b[90m/ {len(cloud_data)} in registry\x1b[0m\r\n")
         out.append(f"  \x1b[36mCore dir\x1b[0m     \x1b[90m{user_core}\x1b[0m\r\n")
         out.append(f"  \x1b[90m{'─'*58}\x1b[0m\r\n")
-        out.append(f"  \x1b[90mvpm list  │  vpm local  │  vpm search <q>  │  velora --help\x1b[0m\r\n")
+        out.append(f"  \x1b[90mvpm list  │  vpm local  │  vpm ui  │  vpm check\x1b[0m\r\n")
         out.append(f"\x1b[38;5;51;1m{'━'*W}\x1b[0m\r\n")
         self.insert_ansi_text("".join(out))
+
+    def open_package_manager_ui(self):
+        """Open the graphical Package Manager dialog."""
+        self.insert_ansi_text(
+            "\r\n\x1b[38;5;51;1m📦 Opening Velora Package Manager UI...\x1b[0m\r\n")
+        QApplication.processEvents()
+        # Find the top-level TerminalApp window to use as parent
+        parent = self.window()
+        dlg = VeloraPackageManagerDialog(parent)
+        dlg.show()
+
+
 
     def toggle_search(self):
         if self.search_bar.isVisible():
@@ -1999,6 +2017,308 @@ class UpdateChecker(QThread):
             c_parts, l_parts = [int(x) for x in cloud_ver.split('.')], [int(x) for x in local_ver.split('.')]
             return c_parts > l_parts
         except Exception: return cloud_ver != local_ver
+
+
+# ─────────────────────────────────────────────────────────────────
+#  VELORA PACKAGE MANAGER — Graphical UI Dialog
+# ─────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────
+#  VELORA PACKAGE MANAGER — Graphical UI Dialog
+# ─────────────────────────────────────────────────────────────────
+class VeloraPackageManagerDialog(QDialog):
+    """Full graphical Package Manager for Velora Terminal."""
+
+    _STYLE = """
+    QDialog { background:#1a1b26; color:#c0caf5; }
+    #pm_sidebar { background:#16171f; border-right:1px solid #252638; }
+    #pm_header  { background:#16171f; border-bottom:1px solid #252638; }
+    #pm_search  { background:#1f2133; border:1px solid #3a3b55; border-radius:20px;
+                  color:#c0caf5; padding:8px 16px; font-size:13px; }
+    #pm_search:focus { border:1px solid #7aa2f7; }
+    QPushButton#pm_cat { background:transparent; color:#6272a4; border:none;
+        border-radius:8px; padding:10px 14px; text-align:left; font-size:13px; }
+    QPushButton#pm_cat:hover { background:#252638; color:#c0caf5; }
+    QPushButton#pm_cat_active { background:#252638; color:#7aa2f7; font-weight:bold;
+        border:none; border-left:3px solid #7aa2f7; border-radius:0px 8px 8px 0px;
+        padding:10px 14px; text-align:left; font-size:13px; }
+    #pm_card { background:#1f2133; border:1px solid #252638; border-radius:12px; }
+    #pm_card:hover { border:1px solid #3a4a6b; }
+    QPushButton#pm_install { background:#7aa2f7; color:#1a1b26; border:none;
+        border-radius:8px; padding:6px 18px; font-weight:bold; font-size:12px; }
+    QPushButton#pm_install:hover { background:#89b4fa; }
+    QPushButton#pm_remove  { background:transparent; color:#f38ba8;
+        border:1px solid #f38ba8; border-radius:8px; padding:6px 14px; font-size:12px; }
+    QPushButton#pm_remove:hover  { background:rgba(243,139,168,0.10); }
+    QPushButton#pm_update  { background:#f9e2af; color:#1a1b26; border:none;
+        border-radius:8px; padding:6px 14px; font-weight:bold; font-size:12px; }
+    QPushButton#pm_update:hover  { background:#ffd580; }
+    QPushButton#pm_sync    { background:#252638; color:#7aa2f7; border:1px solid #3a3b55;
+        border-radius:8px; padding:6px 14px; font-size:12px; }
+    QPushButton#pm_sync:hover    { background:#2d2f4a; }
+    QScrollBar:vertical { background:#1a1b26; width:8px; border-radius:4px; }
+    QScrollBar::handle:vertical { background:#2a2b3d; border-radius:4px; min-height:30px; }
+    QScrollBar::handle:vertical:hover { background:#3a3b55; }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Velora — Package Manager")
+        self.resize(960, 660)
+        self.setModal(False)
+        self.setStyleSheet(self._STYLE)
+        self._packages = {}
+        self._active_cat = "All"
+        self._build_ui()
+        self._load_cache()
+
+    def _build_ui(self):
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── Sidebar ─────────────────────────────────────
+        sb = QWidget()
+        sb.setObjectName("pm_sidebar")
+        sb.setFixedWidth(190)
+        sbl = QVBoxLayout(sb)
+        sbl.setContentsMargins(10, 20, 10, 12)
+        sbl.setSpacing(4)
+        title = QLabel("📦  Packages")
+        title.setStyleSheet("font-size:16px;font-weight:800;color:#7aa2f7;margin-bottom:14px;")
+        sbl.addWidget(title)
+        self._cat_btns = {}
+        for cat in ["All", "Installed", "Updates", "Official", "Community"]:
+            b = QPushButton(cat)
+            b.setObjectName("pm_cat")
+            b.clicked.connect(lambda _, c=cat: self._set_cat(c))
+            sbl.addWidget(b)
+            self._cat_btns[cat] = b
+        sbl.addStretch()
+        self._sb_status = QLabel("")
+        self._sb_status.setStyleSheet("color:#6272a4;font-size:11px;padding:4px;")
+        self._sb_status.setWordWrap(True)
+        sbl.addWidget(self._sb_status)
+        root.addWidget(sb)
+
+        # ── Main ────────────────────────────────────────
+        main_w = QWidget()
+        main_l = QVBoxLayout(main_w)
+        main_l.setContentsMargins(0, 0, 0, 0)
+        main_l.setSpacing(0)
+
+        hdr = QWidget()
+        hdr.setObjectName("pm_header")
+        hdr.setFixedHeight(62)
+        hdrl = QHBoxLayout(hdr)
+        hdrl.setContentsMargins(16, 10, 16, 10)
+        self._search = QLineEdit()
+        self._search.setObjectName("pm_search")
+        self._search.setPlaceholderText("🔍  Search packages by name or description...")
+        self._search.textChanged.connect(self._refresh)
+        hdrl.addWidget(self._search)
+        sync_btn = QPushButton("⟳  Sync Registry")
+        sync_btn.setObjectName("pm_sync")
+        sync_btn.clicked.connect(self._sync)
+        hdrl.addWidget(sync_btn)
+        main_l.addWidget(hdr)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(scroll.Shape.NoFrame)
+        self._cards_w = QWidget()
+        self._cards_l = QVBoxLayout(self._cards_w)
+        self._cards_l.setContentsMargins(16, 14, 16, 14)
+        self._cards_l.setSpacing(10)
+        self._cards_l.addStretch()
+        scroll.setWidget(self._cards_w)
+        main_l.addWidget(scroll)
+        root.addWidget(main_w)
+
+        self._set_cat("All")
+
+    def _set_cat(self, cat):
+        self._active_cat = cat
+        for name, btn in self._cat_btns.items():
+            btn.setObjectName("pm_cat_active" if name == cat else "pm_cat")
+            btn.setStyleSheet("")
+        self._refresh()
+
+    # ── Helpers ──────────────────────────────────────────────────
+    def _is_installed(self, pkg):
+        return os.path.exists(
+            os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py"))
+
+    def _local_ver(self, pkg):
+        p = os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg}.py")
+        if not os.path.exists(p):
+            return None
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                content = f.read()
+            if "# Velora Encrypted Source" in content or "__payload__" in content:
+                return "?"
+            m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+            return m.group(1) if m else "?"
+        except Exception:
+            return "?"
+
+    def _is_newer(self, cv, lv):
+        try:
+            return [int(x) for x in cv.split(".")] > [int(x) for x in lv.split(".")]
+        except Exception:
+            return False
+
+    # ── Data ─────────────────────────────────────────────────────
+    def _load_cache(self):
+        cache = os.path.expanduser("~/.velora/vpm_cache.json")
+        if os.path.exists(cache):
+            try:
+                with open(cache) as f:
+                    self._packages = json.load(f)
+            except Exception:
+                self._packages = {}
+        self._refresh()
+
+    def _sync(self):
+        self._sb_status.setText("Syncing…")
+        QApplication.processEvents()
+        try:
+            import ssl, urllib.request, time
+            pid, key = vpm.get_remote_credentials()
+            ctx = ssl._create_unverified_context()
+            req = urllib.request.Request(
+                f"https://sncloud.in/api/db/{pid}/packages.json?_t={int(time.time())}",
+                headers={"User-Agent": "Velora/1.0", "X-API-Key": key,
+                         "Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+                data = json.loads(r.read().decode())
+            if isinstance(data, dict):
+                self._packages = data
+                with open(os.path.expanduser("~/.velora/vpm_cache.json"), "w") as f:
+                    json.dump(data, f)
+            self._sb_status.setText(f"✔ Synced — {len(self._packages)} pkgs")
+        except Exception as e:
+            self._sb_status.setText(f"Sync error: {e}")
+        self._refresh()
+
+    # ── Card rendering ───────────────────────────────────────────
+    def _refresh(self):
+        while self._cards_l.count() > 1:
+            item = self._cards_l.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        q = self._search.text().lower()
+        cat = self._active_cat
+        shown = 0
+
+        for pkg, info in sorted(self._packages.items()):
+            if not isinstance(info, dict):
+                continue
+            installed  = self._is_installed(pkg)
+            lver       = self._local_ver(pkg) if installed else None
+            cver       = info.get("version", "?")
+            has_upd    = (installed and lver and lver != "?" and self._is_newer(cver, lver))
+            is_off     = "\u2705" in info.get("description", "")
+            desc_clean = info.get("description", "").replace("\u2705", "").strip()
+
+            if cat == "Installed" and not installed:  continue
+            if cat == "Updates"   and not has_upd:    continue
+            if cat == "Official"  and not is_off:     continue
+            if cat == "Community" and is_off:          continue
+            if q and q not in pkg.lower() and q not in desc_clean.lower():
+                continue
+
+            self._cards_l.insertWidget(
+                self._cards_l.count() - 1,
+                self._make_card(pkg, info, installed, lver, cver, has_upd, is_off, desc_clean))
+            shown += 1
+
+        self._sb_status.setText(f"{shown} package(s)")
+
+    def _make_card(self, pkg, info, installed, lver, cver, has_upd, is_off, desc_clean):
+        card = QWidget()
+        card.setObjectName("pm_card")
+        row = QHBoxLayout(card)
+        row.setContentsMargins(16, 14, 16, 14)
+        row.setSpacing(12)
+
+        # Info
+        ic = QVBoxLayout()
+        ic.setSpacing(5)
+        name_row = QHBoxLayout()
+        name_row.setSpacing(8)
+        name_row.addWidget(
+            QLabel(f"<b style='color:#c0caf5;font-size:14px'>{pkg}</b>"))
+
+        def badge(text, fg, bg):
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"background:{bg};color:{fg};border-radius:5px;"
+                f"padding:1px 7px;font-size:11px;")
+            return lbl
+
+        if is_off:    name_row.addWidget(badge("\u2705 Official",  "#7aa2f7", "#1e3050"))
+        if installed: name_row.addWidget(badge("\u25cf Installed", "#a6e3a1", "#1a3025"))
+        if has_upd:   name_row.addWidget(
+            badge(f"\u2b06 {lver}\u2192{cver}", "#f9e2af", "#2e2400"))
+        name_row.addStretch()
+        ic.addLayout(name_row)
+
+        author = info.get("author", "?")
+        ic.addWidget(QLabel(
+            f"<span style='color:#6272a4'>v{cver}  \u00b7  by {author}</span>"))
+
+        short = desc_clean[:95] + "\u2026" if len(desc_clean) > 95 else desc_clean
+        dl = QLabel(f"<span style='color:#8892b0'>{short}</span>")
+        dl.setWordWrap(True)
+        ic.addWidget(dl)
+        row.addLayout(ic, 1)
+
+        # Buttons
+        bc = QVBoxLayout()
+        bc.setSpacing(6)
+        bc.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        if installed:
+            if has_upd:
+                ub = QPushButton("\u2b06 Update")
+                ub.setObjectName("pm_update")
+                ub.clicked.connect(lambda _, p=pkg: self._act("update", p))
+                bc.addWidget(ub)
+            rb = QPushButton("Remove")
+            rb.setObjectName("pm_remove")
+            rb.clicked.connect(lambda _, p=pkg: self._act("remove", p))
+            bc.addWidget(rb)
+        else:
+            ib = QPushButton("\u2b07 Install")
+            ib.setObjectName("pm_install")
+            ib.clicked.connect(lambda _, p=pkg: self._act("install", p))
+            bc.addWidget(ib)
+        row.addLayout(bc)
+        return card
+
+    def _act(self, action, pkg):
+        self._sb_status.setText(f"Running vpm {action} {pkg}\u2026")
+        QApplication.processEvents()
+        try:
+            import subprocess
+            base = getattr(sys, "_MEIPASS",
+                           os.path.dirname(os.path.abspath(sys.argv[0])))
+            if getattr(sys, "frozen", False):
+                cmd = [sys.executable, "--run-core", "vpm", action, pkg]
+            else:
+                cmd = [sys.executable,
+                       os.path.join(base, "terminal.py"),
+                       "--run-core", "vpm", action, pkg]
+            subprocess.run(cmd, timeout=60)
+            self._sb_status.setText(f"\u2714 vpm {action} {pkg}")
+        except Exception as e:
+            self._sb_status.setText(f"Error: {e}")
+        self._load_cache()
+
 
 class TerminalApp(QMainWindow):
     def __init__(self):
