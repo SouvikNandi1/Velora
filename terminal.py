@@ -3,6 +3,21 @@ __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
 
+def clean_version(v):
+    if not v: return "0.0.0"
+    v = str(v).strip().lower().lstrip('v')
+    return re.sub(r'[^0-9.]', '', v)
+
+def is_newer(cloud_v, local_v):
+    c = clean_version(cloud_v)
+    l = clean_version(local_v)
+    try:
+        cp = [int(x) for x in c.split('.') if x.isdigit()]
+        lp = [int(x) for x in l.split('.') if x.isdigit()]
+        return cp > lp
+    except:
+        return c != l
+
 import sys
 import os
 import re
@@ -724,12 +739,8 @@ class CheckUpdatesWorker(QThread):
                             curr = pkg['version']
                             if name in data:
                                 latest = data[name].get('version', '1.0.0').strip()
-                                try:
-                                    if [int(x) for x in latest.split('.')] > [int(x) for x in curr.split('.')]:
-                                        results["packages"].append({"name": name, "current": curr, "latest": latest})
-                                except:
-                                    if latest != curr:
-                                        results["packages"].append({"name": name, "current": curr, "latest": latest})
+                                if is_newer(latest, curr):
+                                    results["packages"].append({"name": name, "current": curr, "latest": latest})
         except: pass
 
         # Check Bootstrap
@@ -748,7 +759,8 @@ class CheckUpdatesWorker(QThread):
                         with open(local_path, 'r', encoding='utf-8') as f:
                             m2 = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', f.read(), re.MULTILINE)
                             if m2: curr = m2.group(1)
-                    results["bootstrap"] = {"current": curr, "latest": latest}
+                    if is_newer(latest, curr):
+                        results["bootstrap"] = {"current": curr, "latest": latest}
         except: pass
         
         self.finished.emit(results)
@@ -1194,21 +1206,17 @@ class SettingsTab(QWidget):
         if results["terminal"]:
             curr = results["terminal"]["current"]
             latest = results["terminal"]["latest"]
-            try:
-                if [int(x) for x in latest.split('.')] > [int(x) for x in curr.split('.')]:
-                    msg += f"<b>Terminal Update Available:</b> v{curr} ➜ <span style='color: #50fa7b;'>v{latest}</span><br>"
-                    updates_available = True
-            except: pass
+            if is_newer(latest, curr):
+                msg += f"<b>Terminal Update Available:</b> v{curr} ➜ <span style='color: #50fa7b;'>v{latest}</span><br>"
+                updates_available = True
             
         # Bootstrap check
         if results["bootstrap"]:
             curr = results["bootstrap"]["current"]
             latest = results["bootstrap"]["latest"]
-            try:
-                if [int(x) for x in latest.split('.')] > [int(x) for x in curr.split('.')]:
-                    msg += f"<b>Bootstrap Update Available:</b> v{curr} ➜ <span style='color: #50fa7b;'>v{latest}</span><br>"
-                    updates_available = True
-            except: pass
+            if is_newer(latest, curr):
+                msg += f"<b>Bootstrap Update Available:</b> v{curr} ➜ <span style='color: #50fa7b;'>v{latest}</span><br>"
+                updates_available = True
             
         # Packages check
         if results["packages"]:
@@ -1442,12 +1450,7 @@ class TerminalSession(QWidget):
     
     def is_newer_version(self, cloud_ver, local_ver):
         """Check if cloud version is newer than local version"""
-        try:
-            c_parts = [int(x) for x in cloud_ver.split('.')]
-            l_parts = [int(x) for x in local_ver.split('.')]
-            return c_parts > l_parts
-        except:
-            return cloud_ver != local_ver
+        return is_newer(cloud_ver, local_ver)
 
     def on_terminal_resize(self, rows, cols):
         if self.process.state() == QProcess.ProcessState.Running and os.name != 'nt':

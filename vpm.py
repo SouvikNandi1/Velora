@@ -14,6 +14,21 @@ import re
 import time
 import py_compile
 
+def clean_version(v):
+    if not v: return "0.0.0"
+    v = str(v).strip().lower().lstrip('v')
+    return re.sub(r'[^0-9.]', '', v)
+
+def is_newer(cloud_v, local_v):
+    c = clean_version(cloud_v)
+    l = clean_version(local_v)
+    try:
+        cp = [int(x) for x in c.split('.') if x.isdigit()]
+        lp = [int(x) for x in l.split('.') if x.isdigit()]
+        return cp > lp
+    except:
+        return c != l
+
 PROJECT_ID = None
 API_KEY = None
 CREDENTIALS_PATH = os.path.expanduser("~/.velora/vpm_secrets.json")
@@ -531,11 +546,7 @@ def update_all():
                 if m: local_ver = m.group(1).strip()
         except Exception: pass
         
-        needs_update = False
-        try:
-            if [int(x) for x in cloud_ver.split('.')] > [int(x) for x in local_ver.split('.')]: needs_update = True
-        except Exception:
-            if cloud_ver != local_ver: needs_update = True
+        needs_update = is_newer(cloud_ver, local_ver)
             
         if needs_update:
             print(f"  \x1b[90mUpdating '{pkg}' (v{local_ver} -> v{cloud_ver})...\x1b[0m")
@@ -625,7 +636,7 @@ def check_updates():
                             m2 = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', local_content, re.MULTILINE)
                             if m2: bootstrap_current = m2.group(1)
                     try:
-                        if [int(x) for x in cloud_bootstrap_ver.split('.')] > [int(x) for x in bootstrap_current.split('.')]: bootstrap_update = cloud_bootstrap_ver
+                        if is_newer(cloud_bootstrap_ver, bootstrap_current): bootstrap_update = cloud_bootstrap_ver
                     except Exception:
                         if cloud_bootstrap_ver != bootstrap_current: bootstrap_update = cloud_bootstrap_ver
         except Exception: pass
@@ -635,21 +646,23 @@ def check_updates():
             data = json.loads(response.read().decode('utf-8'))
             if data and data != 'null':
                 cloud_ver = data.get('version', '1.0.0') if isinstance(data, dict) else '1.0.0'
-                local_ver = os.environ.get("VELORA_VERSION")
-                if not local_ver:
-                    term_path = os.environ.get("VELORA_TERMINAL_PATH")
-                    if not term_path or not os.path.exists(term_path):
-                        term_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
-                    local_ver = "1.0.0"
-                    if os.path.exists(term_path):
+                # Prioritize file-based version detection to avoid stale environment variables
+                term_path = os.environ.get("VELORA_TERMINAL_PATH")
+                if not term_path or not os.path.exists(term_path):
+                    term_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
+                
+                local_ver = "1.0.0"
+                if os.path.exists(term_path):
+                    try:
                         with open(term_path, 'r', encoding='utf-8') as f:
                             m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', f.read(), re.MULTILINE)
                             if m: local_ver = m.group(1)
+                    except: pass
+                else:
+                    local_ver = os.environ.get("VELORA_VERSION", "1.0.0")
+
                 app_current = local_ver
-                try:
-                    if [int(x) for x in cloud_ver.split('.')] > [int(x) for x in local_ver.split('.')]: app_update = cloud_ver
-                except Exception:
-                    if cloud_ver != local_ver: app_update = cloud_ver
+                if is_newer(cloud_ver, local_ver): app_update = cloud_ver
                     
         req = get_request(f"{get_base_url()}.json?_t={int(time.time())}")
         with urllib.request.urlopen(req, context=get_context(), timeout=5) as response:
@@ -666,10 +679,7 @@ def check_updates():
                                 with open(local_path, 'r', encoding='utf-8') as f:
                                     m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', f.read(), re.MULTILINE)
                                     local_ver = m.group(1).strip() if m else "1.0.0"
-                                try:
-                                    if [int(x) for x in cloud_ver.split('.')] > [int(x) for x in local_ver.split('.')]: pkg_updates.append((pkg, local_ver, cloud_ver))
-                                except Exception:
-                                    if cloud_ver != local_ver: pkg_updates.append((pkg, local_ver, cloud_ver))
+                                if is_newer(cloud_ver, local_ver): pkg_updates.append((pkg, local_ver, cloud_ver))
                             except Exception: pass
                             
         print("\n\x1b[36;1m=== 🖥️  Velora Terminal Status ===\x1b[0m")
