@@ -1,0 +1,812 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#1f2330" />
+<title>Velora Blueprint</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+<style>
+:root {
+    --bg: #1f2330;
+    --bg-secondary: #252a3a;
+    --card-bg: rgba(36, 40, 56, 0.72);
+    --glass-bg: rgba(24, 26, 36, 0.74);
+    --border: rgba(255,255,255,0.08);
+
+    --text: #f8f8f2;
+    --text-muted: #bcc3d8;
+
+    --pink: #ff79c6;
+    --purple: #bd93f9;
+    --cyan: #8be9fd;
+    --green: #50fa7b;
+    --yellow: #f1fa8c;
+    --orange: #ffb86c;
+
+    --radius: 24px;
+    --radius-sm: 14px;
+
+    --shadow:
+        0 10px 40px rgba(0,0,0,0.45),
+        0 2px 12px rgba(0,0,0,0.2);
+
+    --transition: .28s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: Inter, sans-serif;
+
+    background-image: 
+        linear-gradient(rgba(15,15,25,.75), rgba(15,15,25,.85)), 
+        url('./src/velora.png');
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+    background-blend-mode: overlay;
+
+    color: var(--text);
+
+    min-height: 100vh;
+
+    display: flex;
+    gap: 24px;
+
+    max-width: 1800px;
+    margin: auto;
+
+    padding: 24px;
+
+    line-height: 1.75;
+
+    overflow-x: hidden;
+
+    -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,.12);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--purple);
+}
+
+.sidebar {
+    width: 300px;
+    flex-shrink: 0;
+
+    position: sticky;
+    top: 24px;
+
+    align-self: flex-start;
+
+    background: var(--glass-bg);
+
+    border: 1px solid var(--border);
+
+    backdrop-filter: blur(18px);
+
+    border-radius: var(--radius);
+
+    padding: 28px;
+
+    box-shadow: var(--shadow);
+
+    z-index: 100;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    font-size: 1.7rem;
+    font-weight: 800;
+    margin-bottom: 30px;
+}
+
+.logo span {
+    background: linear-gradient(
+        90deg,
+        var(--pink),
+        var(--purple),
+        var(--cyan)
+    );
+
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.logo img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.sidebar ul {
+    list-style: none;
+
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sidebar a {
+    text-decoration: none;
+
+    color: var(--text-muted);
+
+    display: flex;
+    align-items: center;
+
+    padding: 13px 16px;
+
+    border-radius: 14px;
+
+    transition: var(--transition);
+
+    font-weight: 500;
+}
+
+.sidebar a:hover {
+    background: rgba(255,255,255,.05);
+
+    color: var(--cyan);
+
+    transform: translateX(4px);
+}
+
+.sidebar a.active {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(189,147,249,.16),
+            rgba(139,233,253,.10)
+        );
+
+    color: white;
+
+    border: 1px solid rgba(189,147,249,.25);
+}
+
+.content {
+    flex: 1;
+
+    background: var(--glass-bg);
+
+    border-radius: var(--radius);
+
+    border: 1px solid var(--border);
+
+    backdrop-filter: blur(18px);
+
+    box-shadow: var(--shadow);
+
+    padding: 56px;
+
+    overflow: hidden;
+}
+
+.hero {
+    text-align: center;
+    margin-bottom: 80px;
+}
+
+.hero-badge {
+    display: inline-block;
+
+    padding: 8px 16px;
+
+    border-radius: 999px;
+
+    background: rgba(189,147,249,.12);
+
+    border: 1px solid rgba(189,147,249,.24);
+
+    color: var(--purple);
+
+    font-size: .9rem;
+
+    margin-bottom: 20px;
+}
+
+.hero h1 {
+    font-size: clamp(2.5rem, 7vw, 5rem);
+
+    font-weight: 800;
+
+    background: linear-gradient(
+        90deg,
+        var(--pink),
+        var(--purple),
+        var(--cyan)
+    );
+
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero p {
+    max-width: 850px;
+
+    margin: 22px auto 0;
+
+    color: var(--text-muted);
+
+    font-size: 1.05rem;
+}
+
+h2 {
+    color: var(--cyan);
+
+    margin-top: 80px;
+    margin-bottom: 24px;
+
+    font-size: clamp(1.6rem, 3vw, 2.3rem);
+
+    position: relative;
+
+    padding-bottom: 12px;
+}
+
+h2::after {
+    content: '';
+
+    position: absolute;
+    left: 0;
+    bottom: 0;
+
+    width: 90px;
+    height: 3px;
+
+    border-radius: 999px;
+
+    background: linear-gradient(
+        90deg,
+        var(--purple),
+        transparent
+    );
+}
+
+h3 {
+    color: var(--orange);
+
+    margin-bottom: 14px;
+
+    font-size: 1.2rem;
+}
+
+p {
+    color: var(--text-muted);
+}
+
+.card {
+    position: relative;
+
+    background: var(--card-bg);
+
+    border: 1px solid rgba(255,255,255,.05);
+
+    border-radius: var(--radius);
+
+    padding: 30px;
+
+    margin-bottom: 24px;
+
+    overflow: hidden;
+
+    transition: var(--transition);
+}
+
+.card::before {
+    content: '';
+
+    position: absolute;
+    inset: 0;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(255,255,255,.04),
+            transparent 60%
+        );
+
+    pointer-events: none;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+
+    border-color: rgba(189,147,249,.18);
+
+    box-shadow:
+        0 12px 28px rgba(0,0,0,.35);
+}
+
+ul,
+ol {
+    padding-left: 22px;
+}
+
+li {
+    margin-bottom: 14px;
+
+    color: var(--text-muted);
+}
+
+strong {
+    color: var(--yellow);
+}
+
+code {
+    background: rgba(0,0,0,.25);
+
+    color: var(--green);
+
+    padding: 3px 8px;
+
+    border-radius: 8px;
+
+    font-family: 'JetBrains Mono', monospace;
+}
+
+pre {
+    overflow-x: auto;
+
+    border-radius: 18px;
+
+    margin-top: 18px;
+
+    border: 1px solid rgba(255,255,255,.05);
+}
+
+pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+
+    border: none;
+
+    background: rgba(255,255,255,.08);
+
+    color: white;
+
+    padding: 8px 14px;
+
+    border-radius: 10px;
+
+    cursor: pointer;
+
+    transition: var(--transition);
+}
+
+.copy-btn:hover {
+    background: var(--purple);
+    transform: scale(1.05);
+}
+
+details {
+    margin-top: 18px;
+
+    border-radius: 18px;
+
+    overflow: hidden;
+
+    background: rgba(0,0,0,.18);
+
+    border: 1px solid rgba(255,255,255,.06);
+}
+
+summary {
+    cursor: pointer;
+
+    padding: 18px 20px;
+
+    color: var(--green);
+
+    font-weight: 600;
+
+    transition: var(--transition);
+}
+
+summary:hover {
+    background: rgba(255,255,255,.03);
+    color: var(--yellow);
+}
+
+.mermaid {
+    overflow-x: auto;
+}
+
+.footer {
+    margin-top: 80px;
+
+    text-align: center;
+
+    color: var(--text-muted);
+
+    opacity: .7;
+}
+
+@media (max-width: 1100px) {
+    body {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        position: relative;
+        top: 0;
+    }
+
+    .sidebar ul {
+        flex-direction: row;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .sidebar li {
+        flex-shrink: 0;
+    }
+
+    .content {
+        padding: 38px;
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 12px;
+        gap: 16px;
+    }
+
+    .sidebar {
+        padding: 18px;
+    }
+
+    .content {
+        padding: 24px 18px;
+    }
+
+    .card {
+        padding: 22px;
+    }
+
+    .sidebar a {
+        padding: 10px 14px;
+        font-size: .9rem;
+    }
+
+    h2 {
+        margin-top: 60px;
+    }
+
+    p,
+    li {
+        font-size: .96rem;
+    }
+
+    pre {
+        font-size: .84rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .content {
+        padding: 18px 14px;
+    }
+
+    .card {
+        padding: 18px;
+    }
+
+    .hero h1 {
+        font-size: 2.2rem;
+    }
+}
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+    <div class="logo">
+        <img src="./src/velora.png" alt="Velora Logo">
+        <span>Velora</span>
+    </div>
+
+    <ul>
+        <li><a href="#tooling">Tooling</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#data-flow">Data Flow</a></li>
+        <li><a href="#design">Design Decisions</a></li>
+    </ul>
+</nav>
+
+<main class="content">
+
+<section class="hero">
+    <div class="hero-badge">Modern Terminal Emulator Architecture</div>
+
+    <h1>Velora Blueprint</h1>
+
+    <p>
+        A next-generation PyQt terminal emulator built with PTY isolation,
+        glassmorphism UI, asynchronous shell handling,
+        advanced ANSI rendering, and enterprise-grade architecture.
+    </p>
+</section>
+
+<h2 id="tooling">1. System Tooling</h2>
+
+<div class="card">
+    <ul>
+        <li><strong><code>req.txt</code></strong>: Dependency manifest.</li>
+        <li><strong><code>install.py</code></strong>: Cross-platform installer bootstrap.</li>
+        <li><strong><code>terminal.py</code></strong>: Main application runner.</li>
+        <li><strong><code>bootstrap.py</code></strong>: Remote "One-Command" deployment script.</li>
+    </ul>
+</div>
+
+<h2 id="architecture">2. Class Architecture</h2>
+
+<div class="card">
+<div class="mermaid">
+classDiagram
+    QMainWindow <|-- TerminalApp
+    QWidget <|-- TerminalSession
+    QWidget <|-- SettingsTab
+    QPlainTextEdit <|-- TerminalDisplay
+    TerminalApp *-- TerminalSession
+    TerminalSession *-- TerminalDisplay
+</div>
+</div>
+
+<div class="card">
+<h3>TerminalDisplay</h3>
+
+<ul>
+    <li>Interactive shell input controller.</li>
+    <li>Persistent command history.</li>
+    <li>Inline autocomplete engine.</li>
+    <li>Drag & drop path insertion.</li>
+    <li>Keyboard shortcuts and context menu.</li>
+</ul>
+
+<details>
+<summary>View Interface</summary>
+<pre><code class="language-python">class TerminalDisplay(QPlainTextEdit):
+    command_entered = pyqtSignal(str)
+    control_sequence = pyqtSignal(str)
+    find_requested = pyqtSignal()</code></pre>
+</details>
+</div>
+
+<div class="card">
+<h3>TerminalSession</h3>
+
+<ul>
+    <li>Persistent PTY shell manager.</li>
+    <li>ANSI escape parser.</li>
+    <li>Dynamic resize synchronization.</li>
+    <li>Output filtering system.</li>
+</ul>
+
+<details>
+<summary>View Interface</summary>
+<pre><code class="language-python">class TerminalSession(QWidget):
+    zoom_changed = pyqtSignal(int)
+    settings_requested = pyqtSignal()
+    session_closed = pyqtSignal()</code></pre>
+</details>
+</div>
+
+<h2 id="data-flow">3. Deployment Data Flow</h2>
+
+<div class="card">
+<div class="mermaid">
+sequenceDiagram
+    participant User as Remote User
+    participant Web as GitHub/Bootstrap
+    participant Local as User PC
+    participant Cloud as SNCloud (VPM)
+
+    User->>Web: Execute Link Command
+    Web->>Local: Download bootstrap.py
+    Local->>Web: Fetch Repository (Public Source)
+    Local->>Local: Install Dependencies
+    Local->>Local: Hardening (E2E Encryption)
+    Local->>Cloud: vpm install (Tools/Plugins)
+    Local->>User: Launch Secure Terminal
+</div>
+</div>
+
+<div class="card">
+<h3>Security Layer</h3>
+<p>
+Velora uses a post-installation hardening phase. All source code is 
+recursively encrypted in-place after download, ensuring that the 
+user's local directory contains no readable plaintext Python code.
+</p>
+</div>
+
+<h2 id="data-flow">3. Data Flow</h2>
+
+<div class="card">
+<div class="mermaid">
+sequenceDiagram
+    actor User
+    participant UI as TerminalDisplay
+    participant Session as TerminalSession
+    participant OS as PTY / Bash
+
+    User->>UI: Type Command
+    UI->>Session: command_entered()
+    Session->>OS: process.write()
+    OS-->>Session: readyReadStandardOutput
+    Session-->>UI: formatted terminal text
+</div>
+</div>
+
+<div class="card">
+<ol>
+    <li>User types a shell command.</li>
+    <li>Signal emitted through PyQt.</li>
+    <li>QProcess forwards command to shell.</li>
+    <li>Shell executes command.</li>
+    <li>ANSI parser formats output.</li>
+    <li>UI renders styled terminal stream.</li>
+</ol>
+</div>
+
+<h2 id="design">4. Design Decisions</h2>
+
+<div class="card">
+<h3>Event Driven Architecture</h3>
+<p>
+Signals and slots ensure modular communication
+between UI components and backend systems.
+</p>
+</div>
+
+<div class="card">
+<h3>PTY Isolation</h3>
+<p>
+A real pseudo-terminal guarantees proper shell behavior,
+interactive prompts, and fullscreen terminal application support.
+</p>
+</div>
+
+<div class="card">
+<h3>Optimized Rendering</h3>
+<p>
+Compiled regex filters and lightweight rendering pipelines
+keep terminal performance extremely fast.
+</p>
+</div>
+
+<div class="footer">
+    Velora Blueprint • Modern Responsive Documentation UI
+</div>
+
+</main>
+
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+
+    if (window.hljs) {
+        hljs.highlightAll();
+    }
+
+    if (window.mermaid) {
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'dark',
+            securityLevel: 'loose',
+            themeVariables: {
+                fontFamily: 'Inter',
+                primaryColor: '#bd93f9',
+                lineColor: '#8be9fd',
+                primaryTextColor: '#fff'
+            }
+        });
+        mermaid.run();
+    }
+
+    const sections = document.querySelectorAll('main h2');
+    const navLinks = document.querySelectorAll('.sidebar a');
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+
+                    if (
+                        link.getAttribute('href') ===
+                        `#${entry.target.id}`
+                    ) {
+                        link.classList.add('active');
+                    }
+                });
+            }
+        });
+    }, {
+        rootMargin: '-15% 0px -70% 0px'
+    });
+
+    sections.forEach(section => observer.observe(section));
+
+    document.querySelectorAll('details pre').forEach(pre => {
+
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.marginTop = '18px';
+        pre.style.marginTop = '0';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        const btn = document.createElement('button');
+
+        btn.className = 'copy-btn';
+        btn.innerText = 'Copy';
+
+        btn.addEventListener('click', async () => {
+
+            try {
+                const code = pre.querySelector('code').innerText;
+
+                await navigator.clipboard.writeText(code);
+
+                btn.innerText = 'Copied';
+
+                setTimeout(() => {
+                    btn.innerText = 'Copy';
+                }, 1800);
+
+            } catch {
+                btn.innerText = 'Failed';
+            }
+        });
+
+        wrapper.appendChild(btn);
+    });
+});
+</script>
+
+</body>
+</html>
+```
