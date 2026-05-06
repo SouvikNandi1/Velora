@@ -15,24 +15,61 @@
             --pink: #ff79c6;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg);
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(189,147,249,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(139,233,253,0.08) 0%, transparent 40%);
+            background-attachment: fixed;
             color: var(--fg);
             margin: 0;
             padding: 40px 20px;
             display: flex;
             justify-content: center;
             box-sizing: border-box;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70vw;
+            height: 70vw;
+            max-width: 900px;
+            max-height: 900px;
+            background-image: url('./src/velora.png');
+            background-position: center;
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.04;
+            z-index: -1;
+            pointer-events: none;
+            filter: blur(2px) grayscale(50%);
         }
         .container {
             max-width: 900px;
             width: 100%;
         }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         h1 {
             text-align: center;
-            color: var(--pink);
-            margin-bottom: 40px;
-            font-size: 2.5em;
+            margin-bottom: 50px;
+            font-size: 3.5em;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ff79c6, #bd93f9, #8be9fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            filter: drop-shadow(0 4px 15px rgba(189,147,249,0.4));
+            animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
         .grid {
             display: grid;
@@ -40,16 +77,25 @@
             gap: 20px;
         }
         .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(36, 40, 56, 0.8), rgba(28, 30, 42, 0.9));
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 30px rgba(0,0,0,0.3);
+            border-radius: 18px;
             padding: 25px;
-            backdrop-filter: blur(10px);
-            transition: transform 0.2s ease, border-color 0.2s ease;
+            backdrop-filter: blur(24px);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        }
+        
+        .card:nth-child(even) {
+            animation-delay: 0.1s;
         }
         .card:hover {
-            transform: translateY(-5px);
-            border-color: var(--cyan);
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(139,233,253,0.6);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 20px 40px rgba(139,233,253,0.15), 0 15px 40px rgba(0,0,0,0.5);
         }
         .card h2 {
             margin-top: 0;
@@ -64,12 +110,17 @@
             color: #bac2de;
         }
         .usage {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 12px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 14px;
             border-radius: 8px;
-            font-family: monospace;
+            font-family: 'JetBrains Mono', monospace;
             color: var(--green);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(80, 250, 123, 0.1);
+            font-size: 0.95em;
+            transition: border-color 0.3s ease;
+        }
+        .card:hover .usage {
+            border-color: rgba(80, 250, 123, 0.4);
         }
         .code-inline {
             color: var(--pink);
@@ -236,7 +287,7 @@
 
             <div class="card">
                 <h2>📦 vpm <span class="v-badge">v1.16.0</span></h2>
-                <div class="author">By <a href="https://github.com/souvik" target="_blank">Souvik</a></div>
+                <div class="author">By <a href="https://github.com/SouvikNandi1" target="_blank">Souvik</a></div>
                 <p>The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use <span class="code-inline">install all</span> to easily grab the entire official suite.</p>
                 <div class="usage">vpm [list | local | check | locate | install | update | remove | build | publish]</div>
             </div>

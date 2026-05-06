@@ -1956,17 +1956,20 @@ class TerminalApp(QMainWindow):
         """Show detailed update information in a new terminal session"""
         session = self.get_active_session()
         if session:
-            detailed_msg = "\r\n\x1b[36;1m═══ Detailed Update Information ═══\x1b[0m\r\n\r\n"
-            detailed_msg += "\x1b[35;1m📦 Package Management:\x1b[0m\r\n"
-            detailed_msg += "\x1b[32mvpm list\x1b[0m           - Browse all available packages\r\n"
-            detailed_msg += "\x1b[32mvpm info <pkg>\x1b[0m     - Get detailed info about a package\r\n"
-            detailed_msg += "\x1b[32mvpm install <pkg>\x1b[0m  - Install a new package\r\n"
-            detailed_msg += "\x1b[32mvpm update <pkg>\x1b[0m   - Update a specific package\r\n"
-            detailed_msg += "\x1b[32mvpm update-all\x1b[0m     - Update all installed packages\r\n"
-            detailed_msg += "\x1b[32mvpm remove <pkg>\x1b[0m   - Remove a package\r\n\r\n"
+            detailed_msg = "\r\n\x1b[38;5;51m\x1b[1m⚡ VELORA SYSTEM REFERENCE \x1b[0m\x1b[90m(Help & Documentation)\x1b[0m\r\n\n"
             
-            detailed_msg += "\x1b[35;1m🚀 Terminal Updates:\x1b[0m\r\n"
-            detailed_msg += "\x1b[32mvpm upgrade\x1b[0m         - Upgrade the terminal application\r\n"
+            detailed_msg += " \x1b[1m📦 Package Management\x1b[0m\r\n"
+            detailed_msg += " \x1b[90m" + "─" * 75 + "\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ vpm list\x1b[0m           \x1b[97mBrowse all available packages\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ vpm info <pkg>\x1b[0m     \x1b[97mGet detailed info about a package\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ vpm install <pkg>\x1b[0m  \x1b[97mInstall a new package\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ vpm update <pkg>\x1b[0m   \x1b[97mUpdate a specific package\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ vpm update-all\x1b[0m     \x1b[97mUpdate all installed packages\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ vpm remove <pkg>\x1b[0m   \x1b[97mRemove a package\x1b[0m\r\n\n"
+            
+            detailed_msg += " \x1b[1m🚀 System Updates\x1b[0m\r\n"
+            detailed_msg += " \x1b[90m" + "─" * 75 + "\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ vpm upgrade\x1b[0m        \x1b[97mUpgrade the terminal application\x1b[0m\r\n"
             
             # Show bootstrap command
             system = platform.system()
@@ -1975,22 +1978,24 @@ class TerminalApp(QMainWindow):
             else:
                 bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
             
-            detailed_msg += f"\x1b[32m{bootstrap_cmd}\x1b[0m\r\n"
-            detailed_msg += "\x1b[90m                        - Full system bootstrap/update from repository\x1b[0m\r\n\r\n"
+            detailed_msg += f" \x1b[32m◆ {bootstrap_cmd}\x1b[0m\r\n"
+            detailed_msg += "   \x1b[90mFull system bootstrap/update from repository\x1b[0m\r\n\n"
             
-            detailed_msg += "\x1b[35;1m🔧 System Information:\x1b[0m\r\n"
-            detailed_msg += f"Platform: {platform.system()} {platform.release()}\r\n"
-            detailed_msg += f"Python: {sys.version.split()[0]}\r\n"
-            detailed_msg += f"Architecture: {platform.machine()}\r\n"
-            detailed_msg += f"Velora Version: {__version__}\r\n\r\n"
+            detailed_msg += " \x1b[1m🔧 System Information\x1b[0m\r\n"
+            detailed_msg += " \x1b[90m" + "─" * 75 + "\x1b[0m\r\n"
+            detailed_msg += f" \x1b[36mPlatform:\x1b[0m     \x1b[97m{platform.system()} {platform.release()}\x1b[0m\r\n"
+            detailed_msg += f" \x1b[36mPython:\x1b[0m       \x1b[97m{sys.version.split()[0]}\x1b[0m\r\n"
+            detailed_msg += f" \x1b[36mArchitecture:\x1b[0m \x1b[97m{platform.machine()}\x1b[0m\r\n"
+            detailed_msg += f" \x1b[36mVersion:\x1b[0m      \x1b[97mv{__version__}\x1b[0m\r\n\n"
             
-            detailed_msg += "\x1b[36;1m═══ Quick Start Commands ═══\x1b[0m\r\n"
-            detailed_msg += "\x1b[32mhelp\x1b[0m                - Show help information\r\n"
-            detailed_msg += "\x1b[32msysinfo\x1b[0m             - Display system information\r\n"
-            detailed_msg += "\x1b[32mweather\x1b[0m             - Check weather information\r\n"
-            detailed_msg += "\x1b[32mcalc\x1b[0m                - Calculator tool\r\n"
-            detailed_msg += "\x1b[32mnotes\x1b[0m               - Note taking application\r\n"
-            detailed_msg += "\x1b[32mtodo\x1b[0m                - Task management\r\n\r\n"
+            detailed_msg += " \x1b[1m⚡ Quick Start Commands\x1b[0m\r\n"
+            detailed_msg += " \x1b[90m" + "─" * 75 + "\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ help\x1b[0m               \x1b[97mShow this help information\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ sysinfo\x1b[0m            \x1b[97mDisplay system hardware information\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ weather\x1b[0m            \x1b[97mCheck local weather forecasts\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ calc\x1b[0m               \x1b[97mOpen the calculator tool\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ notes\x1b[0m              \x1b[97mLaunch note-taking application\x1b[0m\r\n"
+            detailed_msg += " \x1b[32m◆ todo\x1b[0m               \x1b[97mManage your tasks\x1b[0m\r\n\n"
             
             session.insert_ansi_text(detailed_msg)
 
