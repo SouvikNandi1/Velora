@@ -1,6 +1,9 @@
 # Ignore local Velora secret storage and generated files
 .velora/
 
+# Ignore local core programs and generated files
+core/
+
 # Python cache
 __pycache__/
 *.pyc
