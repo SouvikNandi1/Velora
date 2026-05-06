@@ -803,3 +803,19 @@ v1.81.0
 - Fixed a bug where `vpm` failed to sync the registry due to an attribute error in the compiled binary.
 - Resolved the "Bootstrap Outdated (v1.0.0)" issue by improving local `bootstrap.py` path detection for frozen environments.
 - Cleaned up redundant local imports in `terminal.py` to prevent module shadowing.
+
+v1.82.0
+- Improved the UpdateChecker logic to handle network timeouts more gracefully.
+- Added support for custom SNCloud endpoints in development environments.
+
+v1.83.0
+- Refactored the internal VPM core for faster package installation.
+- Optimized Base64 decoding performance for large multi-file projects.
+
+v1.84.0
+- Enhanced the glassmorphism UI with better backdrop blur support on macOS.
+- Fixed a visual glitch in the tab bar during rapid tab switching.
+
+v1.85.0
+- Synchronized ecosystem versioning across Terminal, Bootstrap, and VPM.
+- Resolved "Bootstrap Outdated" false positive by aligning local and remote version strings.
