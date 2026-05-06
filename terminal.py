@@ -1227,33 +1227,30 @@ class TerminalSession(QWidget):
         official.sort()
         community.sort()
 
-        self.insert_ansi_text("\r\n\x1b[38;2;189;147;249m┏━━━━ Velora Cloud Registry ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\x1b[0m\r\n")
-        header = f"┃ {'Package':<17} {'Version':<10} {'Author':<14} {'Description':<29} ┃"
-        self.insert_ansi_text(f"\x1b[90m{header}\x1b[0m\r\n")
+        self.insert_ansi_text("\r\n\x1b[38;5;51m\x1b[1m⚡ VELORA CLOUD REGISTRY \x1b[0m\x1b[90m(Package Manager)\x1b[0m\r\n\n")
 
-        def render_section(title, items, pkg_color):
-            self.insert_ansi_text(f"\x1b[90m┣━━ \x1b[35;1m{title:<68}\x1b[90m ━━┫\x1b[0m\r\n")
+        def render_section(title, items, pkg_color, icon=""):
+            self.insert_ansi_text(f" \x1b[1m{icon} {title}\x1b[0m\r\n")
+            self.insert_ansi_text(f" \x1b[90m" + "─" * 75 + "\x1b[0m\r\n")
             for pkg, info in items:
-                icon = "✅" if title == "Verified Official Suite" else "  "
-                version = info.get('version', 'v1.0.0')
-                author = info.get('author', 'Unknown')[:12]
+                version = info.get('version', '1.0.0')
+                author = info.get('author', 'Unknown')
                 desc = info.get('description', '').replace('✅', '').strip()
-                desc = (desc[:29] + '..') if len(desc) > 29 else desc
-                is_installed = "*" if os.path.exists(os.path.join(user_core_dir, f"{pkg}.py")) else " "
+                desc = (desc[:60] + '..') if len(desc) > 60 else desc
+                is_installed = os.path.exists(os.path.join(user_core_dir, f"{pkg}.py"))
                 
-                # Adjusted padding to handle the 2-cell width of the emoji
-                line = f"┃ {icon}{is_installed} {pkg_color}{pkg:<13}\x1b[0m {version:<10} \x1b[33m{author:<14}\x1b[0m {desc:<29} ┃"
-                self.insert_ansi_text(line + "\r\n")
+                status_badge = "\x1b[42;30m INSTALLED \x1b[0m" if is_installed else "\x1b[100;37m AVAILABLE \x1b[0m"
+                
+                self.insert_ansi_text(f" {pkg_color}◆ {pkg:<15}\x1b[0m \x1b[90mv{version:<8}\x1b[0m {status_badge} \x1b[90mby\x1b[0m \x1b[33m{author[:18]:<18}\x1b[0m\r\n")
+                self.insert_ansi_text(f"   \x1b[97m{desc}\x1b[0m\r\n\n")
 
         if official:
-            render_section("Verified Official Suite", official, "\x1b[36;1m")
+            render_section("Verified Official Suite", official, "\x1b[36;1m", "🛡️")
         
         if community:
-            if official: self.insert_ansi_text("\x1b[90m┃ " + " " * 73 + " ┃\x1b[0m\r\n")
-            render_section("Community Registry", community, "\x1b[32m")
+            render_section("Community Registry", community, "\x1b[32;1m", "🌍")
 
-        self.insert_ansi_text("\x1b[38;2;189;147;249m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\x1b[0m\r\n")
-        self.insert_ansi_text(f"\x1b[90m Total: {len(cloud_data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'\x1b[0m\r\n")
+        self.insert_ansi_text(f"\x1b[90m Total: {len(cloud_data)} packages  │  Use 'vpm info <pkg>' for details\x1b[0m\r\n")
 
     def render_vpm_info(self, pkg_name):
         cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
@@ -1271,22 +1268,23 @@ class TerminalSession(QWidget):
             return
 
         info = data[pkg_name]
-        self.insert_ansi_text(f"\r\n\x1b[36;1m📦 Package Information: \x1b[32;1m{pkg_name}\x1b[0m\r\n")
-        self.insert_ansi_text(f"\x1b[90m" + "─" * 45 + "\x1b[0m\r\n")
+        self.insert_ansi_text(f"\r\n\x1b[38;5;51m\x1b[1m📦 {pkg_name.upper()} \x1b[0m\x1b[90mv{info.get('version', '1.0.0')}\x1b[0m\r\n")
+        self.insert_ansi_text(f" \x1b[90m" + "═" * 60 + "\x1b[0m\r\n")
         
-        self.insert_ansi_text(f"\x1b[35mVersion:    \x1b[0m {info.get('version', 'N/A')}\r\n")
-        self.insert_ansi_text(f"\x1b[35mAuthor:     \x1b[0m {info.get('author', 'Anonymous')}\r\n")
+        self.insert_ansi_text(f" \x1b[36mAuthor:\x1b[0m      \x1b[97m{info.get('author', 'Anonymous')}\x1b[0m\r\n")
         
         if info.get('website'):
-            self.insert_ansi_text(f"\x1b[35mWebsite:    \x1b[0m \x1b[4m{info.get('website')}\x1b[0m\r\n")
+            self.insert_ansi_text(f" \x1b[36mWebsite:\x1b[0m     \x1b[34;4m{info.get('website')}\x1b[0m\r\n")
             
         desc = info.get('description', 'No description provided.').replace('✅', '').strip()
-        self.insert_ansi_text(f"\x1b[35mDescription:\x1b[0m {desc}\r\n")
+        self.insert_ansi_text(f" \x1b[36mDescription:\x1b[0m \x1b[97m{desc}\x1b[0m\r\n")
         
-        self.insert_ansi_text(f"\x1b[90m" + "─" * 45 + "\x1b[0m\r\n")
+        self.insert_ansi_text(f" \x1b[90m" + "─" * 60 + "\x1b[0m\r\n")
         is_installed = os.path.exists(os.path.join(os.path.expanduser("~/.velora/core"), f"{pkg_name}.py"))
-        status = "\x1b[32mInstalled\x1b[0m" if is_installed else "\x1b[33mNot Installed (run 'vpm install " + pkg_name + "')\x1b[0m"
-        self.insert_ansi_text(f"Status: {status}\r\n")
+        if is_installed:
+            self.insert_ansi_text(f" \x1b[42;30m\x1b[1m INSTALLED \x1b[0m  \x1b[32mReady to use\x1b[0m\r\n\n")
+        else:
+            self.insert_ansi_text(f" \x1b[100;37m AVAILABLE \x1b[0m  \x1b[90mInstall with: \x1b[33mvpm install {pkg_name}\x1b[0m\r\n\n")
 
     def toggle_search(self):
         if self.search_bar.isVisible():
