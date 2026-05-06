@@ -13,6 +13,22 @@ VERSION = "1.80.0"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
 INSTALL_DIR = os.path.expanduser("~/.velora/app")
 
+
+def print_header():
+    print(f"\n\x1b[38;5;51m\x1b[1m⚡ VELORA SYSTEM INSTALLER \x1b[0m\x1b[90mv{VERSION}\x1b[0m\n")
+
+def log_step(msg):
+    print(f"  \x1b[33m⏳\x1b[0m \x1b[90m{msg}...\x1b[0m", end='\r', flush=True)
+
+def log_done(msg):
+    print(f"  \x1b[32m✔\x1b[0m \x1b[97m{msg}" + " " * 20)
+
+def log_info(msg):
+    print(f"  \x1b[34mℹ\x1b[0m \x1b[90m{msg}\x1b[0m")
+
+def log_error(msg):
+    print(f"\n  \x1b[31;1m✖\x1b[0m \x1b[31m{msg}\x1b[0m\n")
+
 def encrypt_file(file_path):
     """Transforms a plaintext python file into a secure Velora Encrypted Stub."""
     try:
@@ -41,14 +57,15 @@ def encrypt_file(file_path):
         pass
 
 def secure_installation(directory):
-    print("[*] Hardening installation with End-to-End Encryption...")
+    log_step("Hardening installation with encryption")
     for root, _, files in os.walk(directory):
         for file in files:
             if file.endswith(".py") and file != "bootstrap.py":
                 encrypt_file(os.path.join(root, file))
+    log_done("Installation hardened with E2E encryption")
 
 def create_shortcut():
-    print("[*] Creating Desktop Shortcut...")
+    log_step("Creating Desktop Shortcut")
     
     system = platform.system()
     if system == "Windows":
@@ -70,11 +87,11 @@ def create_shortcut():
     try:
         if system == "Windows":
             shortcut_path = os.path.join(desktop, "Velora.lnk")
-            print(f"[*] Desktop path: {desktop}")
-            print(f"[*] Shortcut path: {shortcut_path}")
-            print(f"[*] Python exe: {python_exe}")
-            print(f"[*] Script path: {script_path}")
-            print(f"[*] Icon path: {icon_path}")
+            
+            
+            
+            
+            
             
             # Ensure desktop directory exists
             os.makedirs(desktop, exist_ok=True)
@@ -87,26 +104,26 @@ def create_shortcut():
                 f"$s.IconLocation='{icon_path}';"
                 f"$s.Save()"
             )
-            print(f"[*] Running PowerShell command: {ps_cmd}")
+            
             # Try PowerShell first
             try:
                 result = subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True, text=True, timeout=10)
                 if result.returncode != 0:
-                    print(f"[!] PowerShell error: {result.stderr}")
-                    print(f"[!] PowerShell stdout: {result.stdout}")
+                    
+                    
                     raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
                 else:
                     print("[*] PowerShell command succeeded")
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-                print(f"[!] PowerShell shortcut creation failed: {e}")
-                print("[*] Falling back to batch file creation...")
+                
+                
                 
                 # Fallback: Create a batch file
                 batch_path = os.path.join(desktop, "Velora.bat")
                 batch_content = f'@echo off\n"{python_exe}" "{script_path}"\n'
                 with open(batch_path, 'w') as f:
                     f.write(batch_content)
-                print(f"[*] Created batch file: {batch_path}")
+                
                 shortcut_path = batch_path
 
         elif system == "Linux":
@@ -131,29 +148,29 @@ def create_shortcut():
                 f.write(content)
             os.chmod(shortcut_path, 0o755)
         
-        print(f"\x1b[32;1m[+] Shortcut created successfully on your Desktop!\x1b[0m")
+        log_done("Desktop shortcut created successfully")
     except Exception as e:
-        print(f"\x1b[31;1m[-] Failed to create shortcut: {e}\x1b[0m")
-        print(f"\x1b[33m[!] You can still launch Velora manually: {python_exe} {script_path}\x1b[0m")
+        log_error(f"Failed to create shortcut: {e}")
+        log_info(f"You can still launch Velora manually: {python_exe} {script_path}")
 
 def main():
-    print(f"\x1b[36;1m═══ Velora Online Bootstrapper v{VERSION} ═══\x1b[0m")
+    print_header()
     
     # Check Python version
     if sys.version_info < (3, 8):
-        print(f"\x1b[31;1m[-] Python 3.8 or higher is required. Current version: {sys.version}\x1b[0m")
+        log_error(f"Python 3.8 or higher is required. Current version: {sys.version}")
         return
     
     if os.path.exists(INSTALL_DIR):
-        print("[*] Velora is already installed. Checking for updates...")
+        log_info("Velora is already installed. Checking for updates...")
     else:
-        print(f"[*] Installing Velora to {INSTALL_DIR}...")
+        log_info(f"Installing Velora to {INSTALL_DIR}...")
         os.makedirs(INSTALL_DIR, exist_ok=True)
 
     # Download latest repository zip
     zip_path = os.path.join(INSTALL_DIR, "velora.zip")
     try:
-        print("[*] Downloading latest source from GitHub...")
+        log_step("Downloading latest source from GitHub")
         urllib.request.urlretrieve(REPO_URL, zip_path)
         
         import zipfile
@@ -174,34 +191,38 @@ def main():
             shutil.rmtree(extracted_folder)
             
         os.remove(zip_path)
+        log_done("Downloaded latest source from GitHub")
     except Exception as e:
-        print(f"\x1b[31;1m[-] Download error: {e}\x1b[0m")
+        log_error(f"Download error: {e}")
         return
 
     # Install dependencies
-    print("[*] Installing requirements...")
+    log_step("Installing requirements")
     install_script = os.path.join(INSTALL_DIR, "install.py")
     if os.path.exists(install_script):
-        subprocess.run([sys.executable, install_script])
+        subprocess.run([sys.executable, install_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        log_done("Installed requirements")
 
     # Secure the codes so no one can read or change them
     secure_installation(INSTALL_DIR)
 
     # Install core packages
-    print("[*] Installing core packages...")
+    log_step("Installing core packages")
     vpm_script = os.path.join(INSTALL_DIR, "vpm.py")
     if os.path.exists(vpm_script):
         try:
-            subprocess.run([sys.executable, vpm_script, "install", "all"], check=True)
+            subprocess.run([sys.executable, vpm_script, "install", "all"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            log_done("Installed core packages")
         except subprocess.CalledProcessError:
-            print("[!] Core packages installation failed. You can install them later with 'vpm install all'")
+            log_error("Core packages installation failed")
+            log_info("You can install them later with 'vpm install all'")
 
     # Create the shortcut
     create_shortcut()
 
-    print(f"\n\x1b[32;1m🚀 Velora is ready!\x1b[0m")
-    print(f"You can launch it from your Desktop or by running:")
-    print(f"  \x1b[36m{sys.executable} {os.path.join(INSTALL_DIR, 'terminal.py')}\x1b[0m\n")
+    print(f"\n  \x1b[32;1m🚀 VELORA IS READY!\x1b[0m\n")
+    print(f"  You can launch it from your Desktop or by running:")
+    print(f"  \x1b[38;5;51m{sys.executable} {os.path.join(INSTALL_DIR, 'terminal.py')}\x1b[0m\n")
 
     # Launch immediately
     try:

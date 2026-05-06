@@ -1180,11 +1180,31 @@ class TerminalSession(QWidget):
     def run_control_sequence(self, seq):
         self.process.write(seq.encode())
 
+    def sync_registry(self):
+        try:
+            self.insert_ansi_text("\r\n\x1b[33;1m⏳ Synchronizing Velora Cloud Registry...\x1b[0m\r\n")
+            QApplication.processEvents()
+            
+            import vpm, ssl, urllib.request, json, time
+            project_id, api_key = vpm.get_remote_credentials()
+            ctx = ssl._create_unverified_context()
+            
+            req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                if isinstance(data, dict):
+                    cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
+                    with open(cache_path, 'w') as f: json.dump(data, f)
+            return True
+        except Exception as e:
+            self.insert_ansi_text(f"\x1b[31;1mError:\x1b[0m Could not sync registry: {e}\r\n")
+            return False
+
     def render_vpm_list(self):
         cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
         if not os.path.exists(cache_path):
-            self.insert_ansi_text("\r\n\x1b[31;1mError:\x1b[0m Package cache not found. Please wait for sync or check your connection.\r\n")
-            return
+            if not self.sync_registry():
+                return
 
         try:
             with open(cache_path, 'r') as f:
@@ -1238,8 +1258,8 @@ class TerminalSession(QWidget):
     def render_vpm_info(self, pkg_name):
         cache_path = os.path.expanduser("~/.velora/vpm_cache.json")
         if not os.path.exists(cache_path):
-            self.insert_ansi_text("\r\n\x1b[31;1mError:\x1b[0m No metadata cache found.\r\n")
-            return
+            if not self.sync_registry():
+                return
 
         try:
             with open(cache_path, 'r') as f:
