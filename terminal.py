@@ -1,4 +1,4 @@
-__version__ = "1.86.0"
+__version__ = "1.87.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -688,6 +688,71 @@ class VPMWorker(QThread):
         local = vpm.get_local_packages_info()
         self.finished.emit(cloud, local)
 
+class CheckUpdatesWorker(QThread):
+    finished = pyqtSignal(dict)
+
+    def run(self):
+        results = {
+            "terminal": None,
+            "bootstrap": None,
+            "packages": []
+        }
+        
+        try:
+            project_id, api_key = vpm.get_remote_credentials()
+            if project_id and api_key:
+                ctx = ssl._create_unverified_context()
+                
+                # Check Terminal
+                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}", 
+                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+                with urllib.request.urlopen(req, context=ctx, timeout=5) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if data and isinstance(data, dict):
+                        latest = data.get('version', '1.0.0').strip()
+                        results["terminal"] = {"current": __version__, "latest": latest}
+                
+                # Check Packages
+                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
+                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+                with urllib.request.urlopen(req, context=ctx, timeout=5) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if isinstance(data, dict):
+                        local_pkgs = vpm.get_local_packages_info()
+                        for pkg in local_pkgs:
+                            name = pkg['name']
+                            curr = pkg['version']
+                            if name in data:
+                                latest = data[name].get('version', '1.0.0').strip()
+                                try:
+                                    if [int(x) for x in latest.split('.')] > [int(x) for x in curr.split('.')]:
+                                        results["packages"].append({"name": name, "current": curr, "latest": latest})
+                                except:
+                                    if latest != curr:
+                                        results["packages"].append({"name": name, "current": curr, "latest": latest})
+        except: pass
+
+        # Check Bootstrap
+        try:
+            req = urllib.request.Request("https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py", headers={'User-Agent': 'Velora-VPM'})
+            with urllib.request.urlopen(req, context=ssl._create_unverified_context(), timeout=5) as response:
+                content = response.read().decode('utf-8')
+                m = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+                if m:
+                    latest = m.group(1)
+                    curr = "1.0.0"
+                    local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bootstrap.py")
+                    if not os.path.exists(local_path):
+                        local_path = os.path.expanduser("~/.velora/app/bootstrap.py")
+                    if os.path.exists(local_path):
+                        with open(local_path, 'r', encoding='utf-8') as f:
+                            m2 = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', f.read(), re.MULTILINE)
+                            if m2: curr = m2.group(1)
+                    results["bootstrap"] = {"current": curr, "latest": latest}
+        except: pass
+        
+        self.finished.emit(results)
+
 class VPMPackageCard(QFrame):
     action_triggered = pyqtSignal(str, str) # action, pkg_name
 
@@ -1005,11 +1070,15 @@ class SettingsTab(QWidget):
         self.save_btn = QPushButton("Save & Apply Settings")
         self.save_btn.clicked.connect(self.save_settings)
         
+        self.update_btn = QPushButton("Check for Updates")
+        self.update_btn.clicked.connect(self.check_for_updates)
+        
         self.clear_history_btn = QPushButton("Clear Command History")
         self.clear_history_btn.clicked.connect(self.prompt_clear_history)
         
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(self.save_btn)
+        btn_layout.addWidget(self.update_btn)
         btn_layout.addWidget(self.clear_history_btn)
         self.layout.addLayout(btn_layout)
         
@@ -1105,6 +1174,53 @@ class SettingsTab(QWidget):
         self.settings.setValue("opacity", self.opacity_slider.value())
         self.apply_theme()
         self.settings_applied.emit()
+
+    def check_for_updates(self):
+        self.update_btn.setText("Checking...")
+        self.update_btn.setEnabled(False)
+        
+        self.update_worker = CheckUpdatesWorker()
+        self.update_worker.finished.connect(self.on_updates_checked)
+        self.update_worker.start()
+
+    def on_updates_checked(self, results):
+        self.update_btn.setText("Check for Updates")
+        self.update_btn.setEnabled(True)
+        
+        msg = ""
+        updates_available = False
+        
+        # Terminal check
+        if results["terminal"]:
+            curr = results["terminal"]["current"]
+            latest = results["terminal"]["latest"]
+            try:
+                if [int(x) for x in latest.split('.')] > [int(x) for x in curr.split('.')]:
+                    msg += f"<b>Terminal Update Available:</b> v{curr} ➜ <span style='color: #50fa7b;'>v{latest}</span><br>"
+                    updates_available = True
+            except: pass
+            
+        # Bootstrap check
+        if results["bootstrap"]:
+            curr = results["bootstrap"]["current"]
+            latest = results["bootstrap"]["latest"]
+            try:
+                if [int(x) for x in latest.split('.')] > [int(x) for x in curr.split('.')]:
+                    msg += f"<b>Bootstrap Update Available:</b> v{curr} ➜ <span style='color: #50fa7b;'>v{latest}</span><br>"
+                    updates_available = True
+            except: pass
+            
+        # Packages check
+        if results["packages"]:
+            msg += "<br><b>Package Updates:</b><br>"
+            for pkg in results["packages"]:
+                msg += f"• {pkg['name']}: v{pkg['current']} ➜ <span style='color: #50fa7b;'>v{pkg['latest']}</span><br>"
+            updates_available = True
+            
+        if not updates_available:
+            QMessageBox.information(self, "Velora Update Checker", "Everything is up to date! ✅")
+        else:
+            QMessageBox.information(self, "Velora Update Checker", f"Updates are available!<br><br>{msg}<br>Run <b>vpm upgrade</b> or <b>vpm update-all</b> to install them.")
 
     def prompt_clear_history(self):
         reply = QMessageBox.question(self, 'Clear History', 
