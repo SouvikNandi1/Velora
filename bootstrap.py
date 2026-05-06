@@ -13,20 +13,78 @@ VERSION = "1.82.0"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
 INSTALL_DIR = os.path.expanduser("~/.velora/app")
 
+import threading
+import time
+import itertools
 
 def print_header():
-    print(f"\n\x1b[38;5;51m\x1b[1m⚡ VELORA SYSTEM INSTALLER \x1b[0m\x1b[90mv{VERSION}\x1b[0m\n")
+    banner = """\x1b[38;5;51m\x1b[1m
+ ██▒   █▓▓█████  ██▓     ▒█████   ██▀███   ▄▄▄      
+▓██░   █▒▓█   ▀ ▓██▒    ▒██▒  ██▒▓██ ▒ ██▒▒████▄    
+ ▓██  █▒░▒███   ▒██░    ▒██░  ██▒▓██ ░▄█ ▒▒██  ▀█▄  
+  ▒██ █░░▒▓█  ▄ ▒██░    ▒██   ██░▒██▀▀█▄  ░██▄▄▄▄██ 
+   ▒▀█░  ░▒████▒░██████▒░ ████▓▒░░██▓ ▒██▒ ▓█   ▓██▒
+   ░ ▐░  ░░ ▒░ ░░ ▒░▓  ░░ ▒░▒░▒░ ░ ▒▓ ░▒▓░ ▒▒   ▓▒█░
+   ░ ░░   ░ ░  ░░ ░ ▒  ░  ░ ▒ ▒░   ░▒ ░ ▒░  ▒   ▒▒ ░
+     ░░     ░     ░ ░   ░ ░ ░ ▒    ░░   ░   ░   ▒   
+      ░     ░  ░    ░  ░    ░ ░     ░           ░  ░
+     ░                                              \x1b[0m"""
+    print(banner)
+    print(f"  \x1b[38;5;51m\x1b[1m⚡ VELORA SYSTEM INSTALLER \x1b[0m\x1b[90m│ v{VERSION}\x1b[0m")
+    print(f"  \x1b[90m" + "─" * 45 + "\x1b[0m\n")
+
+class Spinner:
+    def __init__(self, message="Processing"):
+        self.spinner = itertools.cycle(['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'])
+        self.delay = 0.1
+        self.message = message
+        self.running = False
+        self.task_thread = None
+
+    def _spin(self):
+        while self.running:
+            sys.stdout.write(f"\r  \x1b[38;5;51m{next(self.spinner)}\x1b[0m \x1b[90m{self.message}...\x1b[0m" + " " * 5)
+            sys.stdout.flush()
+            time.sleep(self.delay)
+
+    def start(self):
+        self.running = True
+        self.task_thread = threading.Thread(target=self._spin)
+        self.task_thread.start()
+
+    def stop(self, success_msg=None):
+        self.running = False
+        if self.task_thread:
+            self.task_thread.join()
+        if success_msg:
+            sys.stdout.write(f"\r  \x1b[32m✔\x1b[0m \x1b[97m{success_msg}\x1b[0m" + " " * 20 + "\n")
+        sys.stdout.flush()
+
+_current_spinner = None
 
 def log_step(msg):
-    print(f"  \x1b[33m⏳\x1b[0m \x1b[90m{msg}...\x1b[0m", end='\r', flush=True)
+    global _current_spinner
+    if _current_spinner:
+        _current_spinner.stop()
+    _current_spinner = Spinner(msg)
+    _current_spinner.start()
 
 def log_done(msg):
-    print(f"  \x1b[32m✔\x1b[0m \x1b[97m{msg}" + " " * 20)
+    global _current_spinner
+    if _current_spinner:
+        _current_spinner.stop(msg)
+        _current_spinner = None
+    else:
+        print(f"  \x1b[32m✔\x1b[0m \x1b[97m{msg}" + " " * 20)
 
 def log_info(msg):
     print(f"  \x1b[34mℹ\x1b[0m \x1b[90m{msg}\x1b[0m")
 
 def log_error(msg):
+    global _current_spinner
+    if _current_spinner:
+        _current_spinner.stop()
+        _current_spinner = None
     print(f"\n  \x1b[31;1m✖\x1b[0m \x1b[31m{msg}\x1b[0m\n")
 
 def encrypt_file(file_path):
