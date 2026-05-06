@@ -14,6 +14,7 @@ import re
 import time
 import py_compile
 import subprocess
+import platform
 import terminal_utils
 
 def clean_version(v):
@@ -631,21 +632,28 @@ def check_updates():
                                 if is_newer(cloud_ver, local_ver): pkg_updates.append((pkg, local_ver, cloud_ver))
                             except Exception: pass
                             
-        terminal_utils.print_section("Velora Update Center", color=terminal_utils.PURPLE)
+        terminal_utils.print_header("Velora Update Center", color=terminal_utils.PURPLE)
         
         # Terminal Status
+        terminal_utils.print_section("Terminal Application", color=terminal_utils.CYAN)
         if app_update:
-            terminal_utils.print_status(f"Terminal Outdated: {terminal_utils.RED}{app_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{app_update}{terminal_utils.RESET}", type="warning")
+            terminal_utils.print_status(f"Outdated: {terminal_utils.RED}{app_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{app_update}{terminal_utils.RESET}", type="warning")
             print(f"  {terminal_utils.YELLOW}🔔 Run 'vpm upgrade' to install the new version.{terminal_utils.RESET}")
         else:
-            terminal_utils.print_status(f"Terminal Up to date (v{app_current})", type="success")
+            terminal_utils.print_status(f"Up to date (v{app_current})", type="success")
 
         # Bootstrap Status
+        terminal_utils.print_section("Bootstrap Installer", color=terminal_utils.CYAN)
         if bootstrap_update:
-            terminal_utils.print_status(f"Bootstrap Outdated: {terminal_utils.RED}{bootstrap_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{bootstrap_update}{terminal_utils.RESET}", type="warning")
-            print(f"  {terminal_utils.YELLOW}🔔 Re-run the bootstrap installer to update.{terminal_utils.RESET}")
+            terminal_utils.print_status(f"Outdated: {terminal_utils.RED}{bootstrap_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{bootstrap_update}{terminal_utils.RESET}", type="warning")
+            print(f"  {terminal_utils.YELLOW}🔔 Re-run the bootstrap installer to update:{terminal_utils.RESET}")
+            if platform.system() == "Windows":
+                cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
+            else:
+                cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
+            print(f"  {terminal_utils.CYAN}{terminal_utils.BOLD}{cmd}{terminal_utils.RESET}")
         else:
-            terminal_utils.print_status(f"Bootstrap Up to date (v{bootstrap_current})", type="success")
+            terminal_utils.print_status(f"Up to date (v{bootstrap_current})", type="success")
 
         # Package Status
         if pkg_updates:
