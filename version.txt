@@ -787,3 +787,4 @@ v1.78.0
 - Hardened `vpm.py` package discovery to explicitly ignore root-level system files (terminal, bootstrap, etc.) during package scanning.
 - Synchronized `bootstrap.py` versioning with the main terminal application.
 - Bumped VPM core version to `v1.17.3`.
+- Added `install-tor` core tool for automated Tor installation across Linux, macOS, and Windows platforms.
