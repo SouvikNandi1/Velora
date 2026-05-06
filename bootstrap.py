@@ -5,6 +5,9 @@ import platform
 import shutil
 import urllib.request
 import base64
+import ssl
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 VERSION = "1.80.0"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
