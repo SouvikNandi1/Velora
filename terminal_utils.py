@@ -1,3 +1,8 @@
+__version__ = "1.0.0"
+__description__ = "Centralized styling and UI utility for Velora Terminal."
+__author__ = "Souvik"
+__website__ = ""
+
 import sys
 import os
 import shutil

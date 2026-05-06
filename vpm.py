@@ -1,4 +1,4 @@
-__version__ = "1.22.0"
+__version__ = "1.23.0"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -411,35 +411,35 @@ def install_package(pkg_name):
         terminal_utils.print_status(f"Error installing package: {e}", type="error")
 
 def install_all_official():
-    print("\x1b[36;1mFetching official Velora packages from SNCloud...\x1b[0m")
+    terminal_utils.print_status(f"Fetching official Velora packages from SNCloud...", type="info")
     url = f"{get_base_url()}.json?_t={int(time.time())}"
     try:
         req = get_request(url)
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
             if not data or data == 'null':
-                print("  \x1b[90mNo packages found in the cloud.\x1b[0m")
+                terminal_utils.print_status("No packages found in the cloud.", type="info")
                 return
             
             count = 0
             for pkg, info in data.items():
                 if isinstance(info, dict) and '✅' in info.get('description', ''):
-                    print(f"\n\x1b[36;1mInstalling official package: '{pkg}'...\x1b[0m")
+                    terminal_utils.print_status(f"Installing official package: '{pkg}'...", type="info")
                     install_package(pkg)
                     count += 1
             
-            print(f"\n\x1b[32;1mFinished installing {count} official packages.\x1b[0m")
+            terminal_utils.print_status(f"Finished installing {count} official packages.", type="success")
             
             build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
             if not IS_FROZEN and os.path.exists(build_script):
-                print("\x1b[36;1mAutomatically building new executable version...\x1b[0m")
+                terminal_utils.print_status("Automatically building new executable version...", type="info")
                 import subprocess
                 try:
                     subprocess.call([sys.executable, build_script])
                 except Exception as e:
-                    print(f"\x1b[31;1mBuild error:\x1b[0m {e}")
+                    terminal_utils.print_status(f"Build error: {e}", type="error")
     except Exception as e:
-        print(f"\x1b[31;1mError fetching packages for install-all:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error fetching packages for install-all: {e}", type="error")
 
 def locate_package(pkg_name):
     target_path_user = os.path.join(USER_CORE_DIR, f"{pkg_name}.py")
@@ -519,8 +519,8 @@ def update_all():
 
 def upgrade_terminal():
     if IS_FROZEN:
-        print("\x1b[31;1mError:\x1b[0m Cannot perform over-the-air terminal upgrades on compiled native binaries.")
-        print("Please download the latest executable installer or rebuild using build.py.")
+        terminal_utils.print_status("Cannot perform over-the-air terminal upgrades on compiled native binaries.", type="error")
+        print(f"  {terminal_utils.GREY}Please download the latest executable installer or rebuild using build.py.{terminal_utils.RESET}")
         return
     project_id, _ = get_remote_credentials()
     url = f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}"
@@ -528,12 +528,12 @@ def upgrade_terminal():
         req = get_request(url)
         data = download_with_progress(req)
         if not data or data == 'null':
-            print("\x1b[31;1mError:\x1b[0m Terminal update not found on SNCloud.")
+            terminal_utils.print_status("Terminal update not found on SNCloud.", type="error")
             return
         
         code = data.get('code')
         if not code:
-            print("\x1b[31;1mError:\x1b[0m Invalid terminal payload from server.")
+            terminal_utils.print_status("Invalid terminal payload from server.", type="error")
             return
         
         target_path = os.environ.get("VELORA_TERMINAL_PATH")
@@ -541,7 +541,7 @@ def upgrade_terminal():
             target_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
         with open(target_path, 'w', encoding='utf-8') as f:
             f.write(code)
-        print("\x1b[32;1mSuccessfully upgraded the Velora Terminal App!\x1b[0m")
+        terminal_utils.print_status("Successfully upgraded the Velora Terminal App!", type="success")
         
         build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
         if not IS_FROZEN and os.path.exists(build_script):
@@ -552,9 +552,9 @@ def upgrade_terminal():
             except Exception as e:
                 print(f"\x1b[31;1mBuild error:\x1b[0m {e}")
                 
-        print("\x1b[33;1mPlease completely close and restart Velora to apply the update.\x1b[0m")
+        print(f"  {terminal_utils.YELLOW}Please completely close and restart Velora to apply the update.{terminal_utils.RESET}")
     except Exception as e:
-        print(f"\x1b[31;1mError upgrading terminal:\x1b[0m {e}")
+        terminal_utils.print_status(f"Upgrade failed: {e}", type="error")
 
 def check_updates():
     terminal_utils.print_status("Checking for updates on SNCloud...", type="info")
@@ -759,25 +759,25 @@ def publish_package(pkg_name, file_path, description="", entry_file=""):
         
         req = get_request(url, data=payload, method='PUT')
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
-            print(f"\x1b[32;1mSuccessfully published '{pkg_name}' to SNCloud!\x1b[0m")
+            terminal_utils.print_status(f"Successfully published '{pkg_name}' to SNCloud!", type="success")
     except Exception as e:
-        print(f"\x1b[31;1mError publishing package:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error publishing package: {e}", type="error")
 
 def unpublish_package(pkg_name):
     url = f"{get_base_url()}/{urllib.parse.quote(pkg_name)}.json"
     try:
         req = get_request(url, method='DELETE')
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
-            print(f"\x1b[32;1mSuccessfully removed '{pkg_name}' from SNCloud!\x1b[0m")
+            terminal_utils.print_status(f"Successfully removed '{pkg_name}' from SNCloud!", type="success")
     except Exception as e:
-        print(f"\x1b[31;1mError removing package from SNCloud:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error removing package from SNCloud: {e}", type="error")
 
 def publish_core_files(password):
     if password != "86531Souvik@":
-        print("\x1b[31;1mError:\x1b[0m Unauthorized. Incorrect password.")
+        terminal_utils.print_status("Unauthorized. Incorrect password.", type="error")
         return
         
-    print("\x1b[36;1mPublishing all core files to SNCloud...\x1b[0m")
+    terminal_utils.print_status("Publishing all core files to SNCloud...", type="info")
     
     help_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), 'help.html')
     descriptions = {}
@@ -795,15 +795,15 @@ def publish_core_files(password):
         base_desc = descriptions.get(pkg, "Official Velora Core Program")
         publish_package(pkg, file_path, f"✅ {base_desc}")
         count += 1
-    print(f"\x1b[32;1mFinished publishing {count} core files.\x1b[0m")
+    terminal_utils.print_status(f"Finished publishing {count} core files.", type="success")
 
 def publish_terminal():
     if IS_FROZEN:
-        print("\x1b[31;1mError:\x1b[0m Cannot publish terminal source from a compiled native binary.")
+        terminal_utils.print_status("Cannot publish terminal source from a compiled native binary.", type="error")
         return
     target_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
     if not os.path.exists(target_path):
-        print(f"\x1b[31;1mError:\x1b[0m Local terminal file '{target_path}' not found.")
+        terminal_utils.print_status(f"Local terminal file '{target_path}' not found.", type="error")
         return
         
     try:
@@ -831,24 +831,24 @@ def publish_terminal():
         req = get_request(url, data=payload, method='PUT')
         
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
-            print("\x1b[32;1mSuccessfully published Velora Terminal to SNCloud!\x1b[0m")
+            terminal_utils.print_status("Successfully published Velora Terminal to SNCloud!", type="success")
     except Exception as e:
-        print(f"\x1b[31;1mError publishing terminal:\x1b[0m {e}")
+        terminal_utils.print_status(f"Error publishing terminal: {e}", type="error")
 
 def build_executable():
     if IS_FROZEN:
-        print("\x1b[31;1mError:\x1b[0m Already running a compiled binary.")
+        terminal_utils.print_status("Already running a compiled binary.", type="error")
         return
     build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
     if os.path.exists(build_script):
-        print("\x1b[36;1mBuilding native executable using PyInstaller...\x1b[0m")
+        terminal_utils.print_status("Building native executable using PyInstaller...", type="info")
         import subprocess
         try:
             subprocess.call([sys.executable, build_script])
         except Exception as e:
             print(f"\x1b[31;1mBuild error:\x1b[0m {e}")
     else:
-        print(f"\x1b[31;1mError:\x1b[0m build.py not found in the project root.")
+        terminal_utils.print_status("build.py not found in the project root.", type="error")
 
 def main():
     # Force UTF-8 standard output to prevent 'charmap' encoding errors with emojis on Windows
@@ -873,8 +873,10 @@ def main():
         help_table.add_row(["upgrade", "Upgrade the main Velora Terminal App"])
         help_table.add_row(["remove <pkg>", "Delete a local package"])
         help_table.add_row(["build", "Compile Velora to a standalone executable"])
-        help_table.add_row(["publish <pkg> <file/dir>", "Upload to SNCloud"])
+        help_table.add_row(["publish <pkg> <file/dir>", "Upload a custom package to SNCloud"])
         help_table.add_row(["unpublish <pkg>", "Delete a package from SNCloud"])
+        help_table.add_row(["publish-app", "Upload the core terminal source to SNCloud"])
+        help_table.add_row(["publish-main <pwd>", "Upload all official core files (Admin)"])
         help_table.print()
         return
         
@@ -892,9 +894,9 @@ def main():
         target_user = os.path.join(USER_CORE_DIR, f"{args[1]}.py")
         target_bundled = os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")
         if not os.path.exists(target_user) and not os.path.exists(target_bundled):
-            print(f"\x1b[33mPackage '{args[1]}' is not installed locally. Use 'vpm install {args[1]}' instead.\x1b[0m")
+            terminal_utils.print_status(f"Package '{args[1]}' is not installed locally. Use 'vpm install {args[1]}' instead.", type="warning")
         else:
-            print(f"\x1b[36;1mUpdating '{args[1]}'...\x1b[0m")
+            terminal_utils.print_status(f"Updating '{args[1]}'...", type="info")
             install_package(args[1])
     elif cmd == 'update-all': update_all()
     elif cmd == 'upgrade': upgrade_terminal()
@@ -909,16 +911,16 @@ def main():
             shutil.rmtree(lib_target)
             removed = True
         if removed:
-            print(f"\x1b[31;1mRemoved user-updated package '{args[1]}'.\x1b[0m")
+            terminal_utils.print_status(f"Removed user-updated package '{args[1]}'.", type="success")
             if os.path.exists(os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")):
                 create_wrapper(args[1])
             else:
                 remove_wrapper(args[1])
         else:
             if os.path.exists(os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")):
-                print(f"\x1b[33mPackage '{args[1]}' is natively bundled with the compiled app and cannot be removed.\x1b[0m")
+                terminal_utils.print_status(f"Package '{args[1]}' is natively bundled with the compiled app and cannot be removed.", type="warning")
             else:
-                print(f"\x1b[33mPackage '{args[1]}' is not installed locally.\x1b[0m")
+                terminal_utils.print_status(f"Package '{args[1]}' is not installed locally.", type="error")
     elif cmd == 'build': build_executable()
     elif cmd == 'publish' and len(args) > 2:
         desc = args[3] if len(args) > 3 else "A custom Velora core package"
@@ -930,9 +932,9 @@ def main():
         if len(args) > 1:
             publish_core_files(args[1])
         else:
-            print("\x1b[31;1mError:\x1b[0m Password required. Usage: vpm publish-main <password>")
+            terminal_utils.print_status("Password required. Usage: vpm publish-main <password>", type="error")
     else:
-        print("\x1b[31;1mInvalid command or missing arguments.\x1b[0m")
+        terminal_utils.print_status("Invalid command or missing arguments.", type="error")
 
 if __name__ == "__main__":
     main()
