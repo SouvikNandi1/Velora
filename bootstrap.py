@@ -48,7 +48,7 @@ def encrypt_file(file_path):
             "    k = b'VeloraSuperSecureKeyForObfuscation2026!'; e = base64.b64decode(__payload__)\n"
             "    d = bytes(b ^ k[i % len(k)] for i, b in enumerate(e)).decode('utf-8')\n"
             "    exec(d, globals())\n"
-            "if __name__ == '__main__': _load()\n"
+            "_load()\n"
         )
 
         with open(file_path, 'w', encoding='utf-8') as f:
