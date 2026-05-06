@@ -839,9 +839,10 @@ class _UpdateCheckerWorker(QThread):
     """Background thread: checks for terminal + package updates without blocking startup."""
     result_ready = pyqtSignal(str)
 
-    def __init__(self, local_version, parent=None):
+    def __init__(self, local_version, manual=False, parent=None):
         super().__init__(parent)
         self.local_version = local_version
+        self.manual = manual
 
     def _is_newer(self, cloud_ver, local_ver):
         try:
@@ -903,19 +904,19 @@ class _UpdateCheckerWorker(QThread):
                 bundled_core_dir = os.path.join(
                     getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.argv[0]))), 'core')
 
-                # Collect every locally installed package file, prefer user dir over bundled
+                # Prefer user_core_dir (unencrypted); fall back to bundled only if not in user dir
                 local_files = {}
-                for search_dir in [bundled_core_dir, user_core_dir]:
+                for search_dir in [bundled_core_dir, user_core_dir]:  # user_core overrides bundled
                     if os.path.isdir(search_dir):
                         for fpath in os.listdir(search_dir):
                             if fpath.endswith('.py'):
-                                pkg_name = fpath[:-3]  # strip .py
+                                pkg_name = fpath[:-3]
                                 local_files[pkg_name] = os.path.join(search_dir, fpath)
 
                 pkg_updates = []
                 for pkg_name, local_path in local_files.items():
                     if pkg_name not in cloud_registry:
-                        continue  # not a cloud package, skip
+                        continue
                     cloud_info = cloud_registry[pkg_name]
                     if not isinstance(cloud_info, dict):
                         continue
@@ -923,9 +924,14 @@ class _UpdateCheckerWorker(QThread):
                     try:
                         with open(local_path, 'r', encoding='utf-8') as f:
                             content = f.read()
+                        # Skip encrypted stubs — can't extract version
+                        if '# Velora Encrypted Source' in content or '__payload__' in content:
+                            continue
                         m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']',
                                       content, re.MULTILINE)
-                        local_pkg_ver = m.group(1).strip() if m else '1.0.0'
+                        if not m:
+                            continue
+                        local_pkg_ver = m.group(1).strip()
                         if self._is_newer(cloud_pkg_ver, local_pkg_ver):
                             pkg_updates.append((pkg_name, local_pkg_ver, cloud_pkg_ver))
                     except Exception:
@@ -943,6 +949,11 @@ class _UpdateCheckerWorker(QThread):
 
         if updates_found:
             self.result_ready.emit(info_msg)
+        elif self.manual:
+            self.result_ready.emit(
+                "\r\n\x1b[32;1m✔ All up to date!\x1b[0m "
+                "\x1b[90mNo updates found for terminal or packages.\x1b[0m\r\n"
+            )
 
 
 class TerminalSession(QWidget):
@@ -1059,12 +1070,16 @@ class TerminalSession(QWidget):
         # Kick off async update check — never blocks startup
         self._start_async_update_check()
 
-    def _start_async_update_check(self):
+    def _start_async_update_check(self, manual=False):
         """Run the update check in a background thread so startup is instant."""
-        self._update_worker = _UpdateCheckerWorker(__version__)
-        self._update_worker.result_ready.connect(self.insert_ansi_text)
+        self._update_worker = _UpdateCheckerWorker(__version__, manual=manual)
+        self._update_worker.result_ready.connect(self._on_update_result)
         self._update_worker.finished.connect(self._update_worker.deleteLater)
         self._update_worker.start()
+
+    def _on_update_result(self, msg):
+        """Deliver update message after a short delay so shell prompt prints first."""
+        QTimer.singleShot(1200, lambda: self.insert_ansi_text(msg))
 
     def is_newer_version(self, cloud_ver, local_ver):
         """Check if cloud version is newer than local version"""
@@ -1204,6 +1219,14 @@ class TerminalSession(QWidget):
         # velora — system dashboard
         if cmd_strip == "velora":
             self.render_velora_dashboard()
+            self.run_control_sequence("\r")
+            return
+
+        # vpm check — manual update scan
+        if cmd_strip == "vpm check":
+            self.insert_ansi_text("\r\n\x1b[33;1m⏳ Checking for updates...\x1b[0m\r\n")
+            QApplication.processEvents()
+            self._start_async_update_check(manual=True)
             self.run_control_sequence("\r")
             return
 
