@@ -89,7 +89,7 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
                 m = re.search(r"__encrypted_payload__\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]", code)
                 if m:
                     enc = base64.b64decode(m.group(1)) # Use the same key and modulo as encrypt_file
-                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 37] for i, b in enumerate(enc)).decode('utf-8')
+                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 39] for i, b in enumerate(enc)).decode('utf-8')
                     exec(dec, module.__dict__)
                 else: raise ImportError(f"Corrupted encrypted payload in {module.__name__}")
 
@@ -101,7 +101,7 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
                 m = re.search(r"__encrypted_payload__\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]", code)
                 if m:
                     enc = base64.b64decode(m.group(1)) # Use the same key and modulo as encrypt_file
-                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 37] for i, b in enumerate(enc)).decode('utf-8')
+                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 39] for i, b in enumerate(enc)).decode('utf-8')
                     lib_dir = os.path.dirname(file_path)
                     if lib_dir not in sys.path: sys.path.insert(0, lib_dir)
                     exec(dec, {"__name__": run_name, "__file__": file_path, "sys": sys, "os": os})
@@ -1499,8 +1499,8 @@ class UpdateChecker(QThread):
             e = base64.b64decode(s)
             return bytes(b ^ k[i % len(k)] for i, b in enumerate(e)).decode()
 
-        project_id = _vd('FANSDRYqJXA=')
-        api_key = _vd('BQsVWEAoBBcAUFZWQwaGBlA0dmduQ3ZLRlQAFVNTcQRUahM=')
+        project_id = _vd('JToZEhYmI2Y=')
+        api_key = _vd('JTwdE0E/RkQXFRMXRkMDEBYWRUZGRUdEUxYWRUVFUxMWEw==')
         
         try:
             ctx = ssl._create_unverified_context()

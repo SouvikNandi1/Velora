@@ -22,8 +22,8 @@ def _vd(s): # Decrypts Velora Data (IDs, Keys)
     return bytes(b ^ k[i % len(k)] for i, b in enumerate(e)).decode()
 
 # Encrypted PROJECT_ID and API_KEY
-PROJECT_ID = _vd('FANSDRYqJXA=')
-API_KEY = _vd('BQsVWEAoBBcAUFZWQwaGBlA0dmduQ3ZLRlQAFVNTcQRUahM=')
+PROJECT_ID = _vd('JToZEhYmI2Y=')
+API_KEY = _vd('JTwdE0E/RkQXFRMXRkMDEBYWRUZGRUdEUxYWRUVFUxMWEw==')
 BASE_URL = f"https://sncloud.in/api/db/{PROJECT_ID}/packages"
 
 IS_FROZEN = getattr(sys, 'frozen', False)
