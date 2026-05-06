@@ -137,9 +137,9 @@ if hasattr(signal, 'SIGTTOU'):
 if hasattr(signal, 'SIGTTIN'):
     signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter
-from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread
-from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit
+from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer
+from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon, QTextDocument, QAction
 import urllib.request
 import json
 import ssl
@@ -856,10 +856,19 @@ class TerminalSession(QWidget):
         self.layout.addWidget(self.output_area)
         
         self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search terminal... (Press Enter to find next, Ctrl+F to toggle)")
+        self.search_bar.setPlaceholderText("Search terminal... (Enter: next, Shift+Enter: previous, Ctrl+F: toggle)")
         self.search_bar.hide()
         self.search_bar.returnPressed.connect(self.perform_search)
         self.layout.insertWidget(0, self.search_bar)
+
+        # Search options
+        self.search_case_sensitive = False
+        self.search_regex = False
+        self.search_backwards = False
+        
+        # Search bar context menu
+        self.search_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.search_bar.customContextMenuRequested.connect(self.show_search_context_menu)
 
         self.output_area.find_requested.connect(self.toggle_search)
 
@@ -934,6 +943,74 @@ class TerminalSession(QWidget):
             f"          \x1b[90mVelora Terminal Core v{__version__}\x1b[0m\r\n\r\n"
         )
         self.insert_ansi_text(ascii_logo)
+        
+        # Show startup information
+        self.show_startup_info()
+
+    def show_startup_info(self):
+        """Display startup information including upgradeable items and available commands"""
+        info_msg = "\x1b[36;1m═══ System Information ═══\x1b[0m\r\n"
+        
+        # Show platform information
+        system = platform.system()
+        if system == "Darwin":
+            platform_name = "macOS"
+            bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+        elif system == "Windows":
+            platform_name = "Windows"
+            bootstrap_cmd = f"python {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+        elif system == "Linux":
+            platform_name = "Linux"
+            bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+        else:
+            platform_name = system
+            bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+        
+        info_msg += f"\x1b[35mPlatform:\x1b[0m {platform_name}\r\n"
+        info_msg += f"\x1b[35mPython:\x1b[0m {sys.version.split()[0]}\r\n"
+        info_msg += f"\x1b[35mArchitecture:\x1b[0m {platform.machine()}\r\n\r\n"
+        
+        # Show bootstrap command
+        info_msg += "\x1b[36;1m═══ Bootstrap Commands ═══\x1b[0m\r\n"
+        info_msg += f"\x1b[32;1m{bootstrap_cmd}\x1b[0m\r\n"
+        info_msg += "\x1b[90mRun this command to update Velora from the latest repository\x1b[0m\r\n\r\n"
+        
+        # Show available core commands
+        info_msg += "\x1b[36;1m═══ Available Core Commands ═══\x1b[0m\r\n"
+        
+        # Get core commands
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        core_dir = os.path.join(base_dir, 'core')
+        user_core_dir = os.path.expanduser("~/.velora/core")
+        
+        core_commands = set()
+        if os.path.exists(core_dir):
+            core_commands.update(f[:-3] for f in os.listdir(core_dir) if f.endswith('.py') and f != '__init__.py')
+        if os.path.exists(user_core_dir):
+            core_commands.update(f[:-3] for f in os.listdir(user_core_dir) if f.endswith('.py') and f != '__init__.py')
+        
+        # Add vpm if it exists
+        if os.path.exists(os.path.join(base_dir, "vpm.py")):
+            core_commands.add("vpm")
+        
+        # Sort and display commands in a nice format
+        sorted_commands = sorted(core_commands)
+        commands_per_line = 6
+        for i in range(0, len(sorted_commands), commands_per_line):
+            line_commands = sorted_commands[i:i + commands_per_line]
+            info_msg += "\x1b[32m" + "  ".join(f"{cmd:<12}" for cmd in line_commands) + "\x1b[0m\r\n"
+        
+        info_msg += f"\r\n\x1b[90mTotal: {len(sorted_commands)} core commands available\x1b[0m\r\n"
+        info_msg += "\x1b[90mType any command name to run it, or 'vpm info <command>' for details\x1b[0m\r\n\r\n"
+        
+        # Show upgrade information
+        info_msg += "\x1b[36;1m═══ Update Information ═══\x1b[0m\r\n"
+        info_msg += "\x1b[33mChecking for updates...\x1b[0m\r\n"
+        info_msg += "\x1b[90mUpdates will be shown here when available\x1b[0m\r\n"
+        info_msg += "\x1b[90mUse 'vpm list' to see available packages\x1b[0m\r\n"
+        info_msg += "\x1b[90mUse 'vpm upgrade' to update the terminal\x1b[0m\r\n\r\n"
+        
+        self.insert_ansi_text(info_msg)
 
     def on_terminal_resize(self, rows, cols):
         if self.process.state() == QProcess.ProcessState.Running and os.name != 'nt':
@@ -1156,6 +1233,7 @@ class TerminalSession(QWidget):
     def toggle_search(self):
         if self.search_bar.isVisible():
             self.search_bar.hide()
+            self.output_area.setExtraSelections([])  # Clear highlights
             self.output_area.setFocus()
         else:
             self.search_bar.show()
@@ -1164,11 +1242,140 @@ class TerminalSession(QWidget):
 
     def perform_search(self):
         query = self.search_bar.text()
-        if query and not self.output_area.find(query):
+        if not query:
+            return
+            
+        # Check for modifier keys
+        modifiers = QApplication.keyboardModifiers()
+        self.search_backwards = modifiers & Qt.KeyboardModifier.ShiftModifier
+        
+        if self.search_regex:
+            found = self.perform_regex_search(query)
+        else:
+            found = self.perform_text_search(query)
+            
+        if found:
+            # Highlight the found text
+            self.highlight_search_results(query)
+        else:
+            # Flash the search bar to indicate no results
+            self.search_bar.setStyleSheet("QLineEdit { background-color: rgba(255, 100, 100, 0.3); }")
+            QTimer.singleShot(200, lambda: self.search_bar.setStyleSheet(""))
+
+    def perform_text_search(self, query):
+        """Perform regular text search"""
+        flags = QTextDocument.FindFlags()
+        if self.search_case_sensitive:
+            flags |= QTextDocument.FindFlag.FindCaseSensitively
+        if self.search_backwards:
+            flags |= QTextDocument.FindFlag.FindBackward
+            
+        found = self.output_area.find(query, flags)
+        if not found:
+            # Wrap around
             cursor = self.output_area.textCursor()
-            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            if self.search_backwards:
+                cursor.movePosition(QTextCursor.MoveOperation.End)
+            else:
+                cursor.movePosition(QTextCursor.MoveOperation.Start)
             self.output_area.setTextCursor(cursor)
-            self.output_area.find(query)
+            found = self.output_area.find(query, flags)
+        return found
+
+    def perform_regex_search(self, query):
+        """Perform regex search"""
+        try:
+            pattern = QRegularExpression(query)
+            if not self.search_case_sensitive:
+                pattern.setPatternOptions(QRegularExpression.PatternOption.CaseInsensitiveOption)
+                
+            cursor = self.output_area.textCursor()
+            if self.search_backwards:
+                found = self.output_area.find(pattern, cursor, QTextDocument.FindFlag.FindBackward)
+                if not found:
+                    # Wrap to end
+                    cursor.movePosition(QTextCursor.MoveOperation.End)
+                    self.output_area.setTextCursor(cursor)
+                    found = self.output_area.find(pattern, cursor, QTextDocument.FindFlag.FindBackward)
+            else:
+                found = self.output_area.find(pattern, cursor)
+                if not found:
+                    # Wrap to start
+                    cursor.movePosition(QTextCursor.MoveOperation.Start)
+                    self.output_area.setTextCursor(cursor)
+                    found = self.output_area.find(pattern, cursor)
+            return found
+        except:
+            return False
+
+    def highlight_search_results(self, query):
+        """Highlight all occurrences of the search query"""
+        if not query:
+            return
+            
+        # Clear previous highlights
+        self.output_area.setExtraSelections([])
+        
+        cursor = self.output_area.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        self.output_area.setTextCursor(cursor)
+        
+        selections = []
+        
+        if self.search_regex:
+            try:
+                pattern = QRegularExpression(query)
+                if not self.search_case_sensitive:
+                    pattern.setPatternOptions(QRegularExpression.PatternOption.CaseInsensitiveOption)
+                    
+                while self.output_area.find(pattern):
+                    selection = QTextEdit.ExtraSelection()
+                    selection.cursor = self.output_area.textCursor()
+                    selection.format.setBackground(QColor(255, 255, 0, 100))  # Light yellow highlight
+                    selections.append(selection)
+            except:
+                pass  # Invalid regex, don't highlight
+        else:
+            flags = QTextDocument.FindFlags()
+            if self.search_case_sensitive:
+                flags |= QTextDocument.FindFlag.FindCaseSensitively
+                
+            while self.output_area.find(query, flags):
+                selection = QTextEdit.ExtraSelection()
+                selection.cursor = self.output_area.textCursor()
+                selection.format.setBackground(QColor(255, 255, 0, 100))  # Light yellow highlight
+                selections.append(selection)
+            
+        self.output_area.setExtraSelections(selections)
+
+    def show_search_context_menu(self, position):
+        """Show context menu for search options"""
+        menu = QMenu(self.search_bar)
+        
+        case_action = QAction("Case Sensitive", self.search_bar)
+        case_action.setCheckable(True)
+        case_action.setChecked(self.search_case_sensitive)
+        case_action.triggered.connect(lambda: self.set_search_option('case_sensitive', case_action.isChecked()))
+        menu.addAction(case_action)
+        
+        regex_action = QAction("Regex Search", self.search_bar)
+        regex_action.setCheckable(True)
+        regex_action.setChecked(self.search_regex)
+        regex_action.triggered.connect(lambda: self.set_search_option('regex', regex_action.isChecked()))
+        menu.addAction(regex_action)
+        
+        menu.exec(self.search_bar.mapToGlobal(position))
+
+    def set_search_option(self, option, value):
+        """Set search option and update search if needed"""
+        if option == 'case_sensitive':
+            self.search_case_sensitive = value
+        elif option == 'regex':
+            self.search_regex = value
+            
+        # Re-run search with new options if there's a query
+        if self.search_bar.text():
+            self.perform_search()
 
     def filter_echo(self, data):
         if self.expecting_echo and self.last_command and data:
@@ -1690,7 +1897,48 @@ class TerminalApp(QMainWindow):
         return None
         
     def show_detailed_updates(self):
-        self.open_settings()
+        """Show detailed update information in a new terminal session"""
+        session = self.get_active_session()
+        if session:
+            detailed_msg = "\r\n\x1b[36;1m═══ Detailed Update Information ═══\x1b[0m\r\n\r\n"
+            detailed_msg += "\x1b[35;1m📦 Package Management:\x1b[0m\r\n"
+            detailed_msg += "\x1b[32mvpm list\x1b[0m           - Browse all available packages\r\n"
+            detailed_msg += "\x1b[32mvpm info <pkg>\x1b[0m     - Get detailed info about a package\r\n"
+            detailed_msg += "\x1b[32mvpm install <pkg>\x1b[0m  - Install a new package\r\n"
+            detailed_msg += "\x1b[32mvpm update <pkg>\x1b[0m   - Update a specific package\r\n"
+            detailed_msg += "\x1b[32mvpm update-all\x1b[0m     - Update all installed packages\r\n"
+            detailed_msg += "\x1b[32mvpm remove <pkg>\x1b[0m   - Remove a package\r\n\r\n"
+            
+            detailed_msg += "\x1b[35;1m🚀 Terminal Updates:\x1b[0m\r\n"
+            detailed_msg += "\x1b[32mvpm upgrade\x1b[0m         - Upgrade the terminal application\r\n"
+            
+            # Show bootstrap command
+            system = platform.system()
+            if system == "Darwin":
+                bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+            elif system == "Windows":
+                bootstrap_cmd = f"python {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+            else:
+                bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+            
+            detailed_msg += f"\x1b[32m{bootstrap_cmd}\x1b[0m\r\n"
+            detailed_msg += "\x1b[90m                        - Full system bootstrap/update from repository\x1b[0m\r\n\r\n"
+            
+            detailed_msg += "\x1b[35;1m🔧 System Information:\x1b[0m\r\n"
+            detailed_msg += f"Platform: {platform.system()} {platform.release()}\r\n"
+            detailed_msg += f"Python: {sys.version.split()[0]}\r\n"
+            detailed_msg += f"Architecture: {platform.machine()}\r\n"
+            detailed_msg += f"Velora Version: {__version__}\r\n\r\n"
+            
+            detailed_msg += "\x1b[36;1m═══ Quick Start Commands ═══\x1b[0m\r\n"
+            detailed_msg += "\x1b[32mhelp\x1b[0m                - Show help information\r\n"
+            detailed_msg += "\x1b[32msysinfo\x1b[0m             - Display system information\r\n"
+            detailed_msg += "\x1b[32mweather\x1b[0m             - Check weather information\r\n"
+            detailed_msg += "\x1b[32mcalc\x1b[0m                - Calculator tool\r\n"
+            detailed_msg += "\x1b[32mnotes\x1b[0m               - Note taking application\r\n"
+            detailed_msg += "\x1b[32mtodo\x1b[0m                - Task management\r\n\r\n"
+            
+            session.insert_ansi_text(detailed_msg)
 
     def show_update_notification(self, pkg_updates, app_update):
         self.update_btn.setVisible(True)
@@ -1698,13 +1946,33 @@ class TerminalApp(QMainWindow):
         
         session = self.get_active_session()
         if session and hasattr(session, 'insert_ansi_text'):
-            msg = "\r\n\x1b[32;1m🚀 VPM Power Tip:\x1b[0m Updates are ready for your system.\r\n"
-            if pkg_updates:
-                msg += f"  \x1b[36mUpdates for: \x1b[32;1m{', '.join(pkg_updates)}\x1b[0m\r\n"
-                msg += "  \x1b[36mRun \x1b[32;1mvpm update-all\x1b[36m to update all installed packages.\x1b[0m\r\n"
+            msg = "\r\n\x1b[32;1m🚀 Updates Available!\x1b[0m\r\n"
+            msg += "\x1b[36;1m═══ Update Details ═══\x1b[0m\r\n"
+            
             if app_update:
-                msg += "  \x1b[36mRun \x1b[32;1mvpm upgrade\x1b[36m for the terminal update.\x1b[0m\r\n"
-            msg += "\r\n"
+                msg += "\x1b[33;1m• Terminal App Update Available\x1b[0m\r\n"
+                msg += "  \x1b[36mRun: \x1b[32;1mvpm upgrade\x1b[36m to update the terminal\x1b[0m\r\n"
+                
+                # Show bootstrap command for major updates
+                system = platform.system()
+                if system == "Darwin":
+                    bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+                elif system == "Windows":
+                    bootstrap_cmd = f"python {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+                else:
+                    bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+                
+                msg += f"  \x1b[36mOr run: \x1b[32;1m{bootstrap_cmd}\x1b[36m for full reinstall\x1b[0m\r\n"
+            
+            if pkg_updates:
+                msg += f"\x1b[33;1m• Package Updates Available ({len(pkg_updates)}):\x1b[0m\r\n"
+                for pkg in pkg_updates[:5]:  # Show first 5, truncate if more
+                    msg += f"  \x1b[32m• {pkg}\x1b[0m\r\n"
+                if len(pkg_updates) > 5:
+                    msg += f"  \x1b[90m... and {len(pkg_updates) - 5} more\x1b[0m\r\n"
+                msg += "  \x1b[36mRun: \x1b[32;1mvpm update-all\x1b[36m to update all packages\x1b[0m\r\n"
+            
+            msg += "\r\n\x1b[90m💡 Tip: Use 'vpm list' to browse all available packages\x1b[0m\r\n"
             user_input = session.output_area.get_current_command()
             session.insert_ansi_text(msg)
             if not user_input:  # Drop a fresh prompt if the user hasn't typed anything yet
