@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.78.0-bd93f9?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Version-1.79.0-bd93f9?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Security-E2E_Hardening-50fa7b?style=for-the-badge" alt="Security">
   <img src="https://img.shields.io/badge/Platform-Cross--Platform-8be9fd?style=for-the-badge" alt="Platform">
 </p>

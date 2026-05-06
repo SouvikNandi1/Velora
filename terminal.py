@@ -1,4 +1,4 @@
-__version__ = "1.78.0"
+__version__ = "1.79.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -948,69 +948,107 @@ class TerminalSession(QWidget):
         self.show_startup_info()
 
     def show_startup_info(self):
-        """Display startup information including upgradeable items and available commands"""
-        info_msg = "\x1b[36;1m═══ System Information ═══\x1b[0m\r\n"
+        """Display startup information only if updates are available"""
+        info_msg = ""
+        updates_found = False
         
-        # Show platform information
+        # Determine system-specific bootstrap command
         system = platform.system()
-        if system == "Darwin":
-            platform_name = "macOS"
-            bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
-        elif system == "Windows":
-            platform_name = "Windows"
-            bootstrap_cmd = f"python {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
-        elif system == "Linux":
-            platform_name = "Linux"
-            bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+        if system == "Windows":
+            bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
         else:
-            platform_name = system
-            bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+            bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
         
-        info_msg += f"\x1b[35mPlatform:\x1b[0m {platform_name}\r\n"
-        info_msg += f"\x1b[35mPython:\x1b[0m {sys.version.split()[0]}\r\n"
-        info_msg += f"\x1b[35mArchitecture:\x1b[0m {platform.machine()}\r\n\r\n"
+        # Check for bootstrap/terminal updates
+        try:
+            import vpm
+            project_id, api_key = vpm.get_remote_credentials()
+            if project_id and api_key:
+                import ssl
+                import urllib.request
+                import json
+                import time
+                
+                ctx = ssl._create_unverified_context()
+                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}", 
+                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if data and isinstance(data, dict):
+                        cloud_app_ver = data.get('version', '1.0.0').strip()
+                        if self.is_newer_version(cloud_app_ver, __version__):
+                            updates_found = True
+                            info_msg += "\x1b[36;1m═══ Bootstrap Update Available ═══\x1b[0m\r\n"
+                            info_msg += f"\x1b[32;1m{bootstrap_cmd}\x1b[0m\r\n"
+                            info_msg += "\x1b[90mRun this command to update Velora from the latest repository\x1b[0m\r\n\r\n"
+        except:
+            pass  # Silently fail if update check fails
         
-        # Show bootstrap command
-        info_msg += "\x1b[36;1m═══ Bootstrap Commands ═══\x1b[0m\r\n"
-        info_msg += f"\x1b[32;1m{bootstrap_cmd}\x1b[0m\r\n"
-        info_msg += "\x1b[90mRun this command to update Velora from the latest repository\x1b[0m\r\n\r\n"
+        # Check for package updates
+        pkg_updates = []
+        try:
+            import vpm
+            project_id, api_key = vpm.get_remote_credentials()
+            if project_id and api_key:
+                import ssl
+                import urllib.request
+                import json
+                import time
+                
+                ctx = ssl._create_unverified_context()
+                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
+                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    if isinstance(data, dict):
+                        core_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core')
+                        user_core_dir = os.path.expanduser("~/.velora/core")
+                        
+                        for pkg, info in data.items():
+                            if isinstance(info, dict):
+                                cloud_ver = info.get('version', '1.0.0').strip()
+                                local_user = os.path.join(user_core_dir, f"{pkg}.py")
+                                local_bundled = os.path.join(core_dir, f"{pkg}.py")
+                                local_path = local_user if os.path.exists(local_user) else local_bundled
+                                
+                                if os.path.exists(local_path):
+                                    try:
+                                        with open(local_path, 'r', encoding='utf-8') as f:
+                                            content = f.read()
+                                        m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+                                        local_ver = m.group(1).strip() if m else "1.0.0"
+                                        if self.is_newer_version(cloud_ver, local_ver):
+                                            pkg_updates.append(pkg)
+                                    except:
+                                        pass
+                        
+                        if pkg_updates:
+                            updates_found = True
+                            info_msg += "\x1b[36;1m═══ Package Updates Available ═══\x1b[0m\r\n"
+                            for pkg in pkg_updates:
+                                info_msg += f"\x1b[32m• {pkg}\x1b[0m\r\n"
+                            info_msg += "\r\n\x1b[36mRun \x1b[32;1mvpm update-all\x1b[36m to update all packages\x1b[0m\r\n\r\n"
+        except:
+            pass  # Silently fail if package check fails
         
-        # Show available core commands
-        info_msg += "\x1b[36;1m═══ Available Core Commands ═══\x1b[0m\r\n"
-        
-        # Get core commands
-        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-        core_dir = os.path.join(base_dir, 'core')
-        user_core_dir = os.path.expanduser("~/.velora/core")
-        
-        core_commands = set()
-        if os.path.exists(core_dir):
-            core_commands.update(f[:-3] for f in os.listdir(core_dir) if f.endswith('.py') and f != '__init__.py')
-        if os.path.exists(user_core_dir):
-            core_commands.update(f[:-3] for f in os.listdir(user_core_dir) if f.endswith('.py') and f != '__init__.py')
-        
-        # Add vpm if it exists
-        if os.path.exists(os.path.join(base_dir, "vpm.py")):
-            core_commands.add("vpm")
-        
-        # Sort and display commands in a nice format
-        sorted_commands = sorted(core_commands)
-        commands_per_line = 6
-        for i in range(0, len(sorted_commands), commands_per_line):
-            line_commands = sorted_commands[i:i + commands_per_line]
-            info_msg += "\x1b[32m" + "  ".join(f"{cmd:<12}" for cmd in line_commands) + "\x1b[0m\r\n"
-        
-        info_msg += f"\r\n\x1b[90mTotal: {len(sorted_commands)} core commands available\x1b[0m\r\n"
-        info_msg += "\x1b[90mType any command name to run it, or 'vpm info <command>' for details\x1b[0m\r\n\r\n"
-        
-        # Show upgrade information
-        info_msg += "\x1b[36;1m═══ Update Information ═══\x1b[0m\r\n"
-        info_msg += "\x1b[33mChecking for updates...\x1b[0m\r\n"
-        info_msg += "\x1b[90mUpdates will be shown here when available\x1b[0m\r\n"
-        info_msg += "\x1b[90mUse 'vpm list' to see available packages\x1b[0m\r\n"
-        info_msg += "\x1b[90mUse 'vpm upgrade' to update the terminal\x1b[0m\r\n\r\n"
-        
-        self.insert_ansi_text(info_msg)
+        # Only show update commands if updates were found
+        if updates_found:
+            info_msg += "\x1b[36;1m═══ Update Commands ═══\x1b[0m\r\n"
+            info_msg += "\x1b[32;1mvpm upgrade\x1b[0m         - Update the terminal application\r\n"
+            info_msg += "\x1b[32;1mvpm update-all\x1b[0m     - Update all installed packages\r\n"
+            info_msg += "\x1b[32;1mvpm list\x1b[0m            - Browse available packages\r\n"
+            info_msg += "\x1b[32;1mvpm info <package>\x1b[0m  - Get package details\r\n"
+            
+            self.insert_ansi_text(info_msg)
+    
+    def is_newer_version(self, cloud_ver, local_ver):
+        """Check if cloud version is newer than local version"""
+        try:
+            c_parts = [int(x) for x in cloud_ver.split('.')]
+            l_parts = [int(x) for x in local_ver.split('.')]
+            return c_parts > l_parts
+        except:
+            return cloud_ver != local_ver
 
     def on_terminal_resize(self, rows, cols):
         if self.process.state() == QProcess.ProcessState.Running and os.name != 'nt':
@@ -1914,12 +1952,10 @@ class TerminalApp(QMainWindow):
             
             # Show bootstrap command
             system = platform.system()
-            if system == "Darwin":
-                bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
-            elif system == "Windows":
-                bootstrap_cmd = f"python {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+            if system == "Windows":
+                bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
             else:
-                bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+                bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
             
             detailed_msg += f"\x1b[32m{bootstrap_cmd}\x1b[0m\r\n"
             detailed_msg += "\x1b[90m                        - Full system bootstrap/update from repository\x1b[0m\r\n\r\n"
@@ -1955,12 +1991,10 @@ class TerminalApp(QMainWindow):
                 
                 # Show bootstrap command for major updates
                 system = platform.system()
-                if system == "Darwin":
-                    bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
-                elif system == "Windows":
-                    bootstrap_cmd = f"python {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+                if system == "Windows":
+                    bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
                 else:
-                    bootstrap_cmd = f"python3 {os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bootstrap.py')}"
+                    bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
                 
                 msg += f"  \x1b[36mOr run: \x1b[32;1m{bootstrap_cmd}\x1b[36m for full reinstall\x1b[0m\r\n"
             

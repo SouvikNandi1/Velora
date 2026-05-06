@@ -789,3 +789,7 @@ v1.78.0
 - Bumped VPM core version to `v1.17.3`.
 - Added `install-tor` core tool for automated Tor installation across Linux, macOS, and Windows platforms.
 - Fixed Unicode encoding issues in `install-tor` tool for Windows compatibility.
+
+v1.79.0
+- Updated system-specific bootstrap update commands in `terminal.py` to match the remote installation strings defined in the README.
+- Replaced local file path references with GitHub-based curl and powershell commands for over-the-air updates.
