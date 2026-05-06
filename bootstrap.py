@@ -9,7 +9,7 @@ import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-VERSION = "1.90.0"
+VERSION = "2.00.0"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
 INSTALL_DIR = os.path.expanduser("~/.velora/app")
 
