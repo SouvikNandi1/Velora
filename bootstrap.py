@@ -94,6 +94,11 @@ def create_shortcut():
 def main():
     print(f"\x1b[36;1m═══ Velora Online Bootstrapper v{VERSION} ═══\x1b[0m")
     
+    # Check Python version
+    if sys.version_info < (3, 8):
+        print(f"\x1b[31;1m[-] Python 3.8 or higher is required. Current version: {sys.version}\x1b[0m")
+        return
+    
     if os.path.exists(INSTALL_DIR):
         print("[*] Velora is already installed. Checking for updates...")
     else:
@@ -136,6 +141,15 @@ def main():
 
     # Secure the codes so no one can read or change them
     secure_installation(INSTALL_DIR)
+
+    # Install core packages
+    print("[*] Installing core packages...")
+    vpm_script = os.path.join(INSTALL_DIR, "vpm.py")
+    if os.path.exists(vpm_script):
+        try:
+            subprocess.run([sys.executable, vpm_script, "install", "all"], check=True)
+        except subprocess.CalledProcessError:
+            print("[!] Core packages installation failed. You can install them later with 'vpm install all'")
 
     # Create the shortcut
     create_shortcut()
