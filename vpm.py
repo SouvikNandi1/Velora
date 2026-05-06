@@ -573,6 +573,8 @@ def check_updates():
                     cloud_bootstrap_ver = m.group(1)
                     # Get local bootstrap version
                     local_bootstrap_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "bootstrap.py")
+                    if not os.path.exists(local_bootstrap_path):
+                        local_bootstrap_path = os.path.expanduser("~/.velora/app/bootstrap.py")
                     if os.path.exists(local_bootstrap_path):
                         with open(local_bootstrap_path, 'r', encoding='utf-8') as f:
                             local_content = f.read()
@@ -594,11 +596,17 @@ def check_updates():
                     term_path = os.environ.get("VELORA_TERMINAL_PATH")
                     if not term_path or not os.path.exists(term_path):
                         term_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
+                        if not os.path.exists(term_path):
+                            term_path = os.path.expanduser("~/.velora/app/terminal.py")
                     local_ver = "1.0.0"
                     if os.path.exists(term_path):
                         with open(term_path, 'r', encoding='utf-8') as f:
-                            m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', f.read(), re.MULTILINE)
-                            if m: local_ver = m.group(1)
+                            code = f.read()
+                            if "# Velora Encrypted Source" in code:
+                                local_ver = cloud_ver # Cannot extract from encrypted stub, assume up to date
+                            else:
+                                m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+                                if m: local_ver = m.group(1)
                 app_current = local_ver
                 try:
                     if [int(x) for x in cloud_ver.split('.')] > [int(x) for x in local_ver.split('.')]: app_update = cloud_ver
