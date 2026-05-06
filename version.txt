@@ -819,3 +819,8 @@ v1.84.0
 v1.85.0
 - Synchronized ecosystem versioning across Terminal, Bootstrap, and VPM.
 - Resolved "Bootstrap Outdated" false positive by aligning local and remote version strings.
+v1.90.0
+- Redesigned the Velora Package Manager (VPM) with a modern sidebar navigation system.
+- Added package categories: All, Official, Installed, and Updates Available for easier management.
+- Enhanced VPM UI with improved glassmorphism aesthetics and responsive grid layouts.
+- Synchronized ecosystem versioning across Terminal, VPM, and Bootstrap.

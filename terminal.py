@@ -1,4 +1,4 @@
-__version__ = "1.89.0"
+__version__ = "1.90.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -936,55 +936,134 @@ class VPMPackageCard(QFrame):
         action = self.main_btn.text().lower()
         self.action_triggered.emit(action, self.name)
 
+class VPMSidebar(QFrame):
+    category_changed = pyqtSignal(str)
+
+    def __init__(self, theme, parent=None):
+        super().__init__(parent)
+        self.theme = theme
+        self.setFixedWidth(240)
+        self.setObjectName("VPMSidebar")
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(15, 20, 15, 20)
+        self.layout.setSpacing(10)
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.buttons = {}
+        categories = [
+            ("All Packages", "all", "📦"),
+            ("Official", "official", "✅"),
+            ("Installed", "installed", "💾"),
+            ("Updates", "updates", "🚀")
+        ]
+
+        for label, key, icon in categories:
+            btn = QPushButton(f"{icon}  {label}")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda checked, k=key: self.on_clicked(k))
+            btn.setFixedHeight(48)
+            self.layout.addWidget(btn)
+            self.buttons[key] = btn
+
+        self.buttons["all"].setChecked(True)
+        self.active_category = "all"
+        self.apply_styles()
+
+    def on_clicked(self, key):
+        for k, btn in self.buttons.items():
+            btn.setChecked(k == key)
+        self.active_category = key
+        self.category_changed.emit(key)
+
+    def apply_styles(self):
+        bg_rgb = _hex_to_rgb_str(self.theme['bg'])
+        border_rgb = _hex_to_rgb_str(self.theme['border'])
+        fg_rgb = _hex_to_rgb_str(self.theme['fg'])
+        sel_rgb = _hex_to_rgb_str(self.theme['sel'])
+
+        self.setStyleSheet(f"""
+            #VPMSidebar {{
+                background-color: rgba({bg_rgb}, 0.15);
+                border-right: 1px solid rgba({border_rgb}, 0.2);
+                border-radius: 0px;
+            }}
+            QPushButton {{
+                background-color: transparent;
+                color: {self.theme['fg']};
+                border: none;
+                border-radius: 12px;
+                text-align: left;
+                padding-left: 20px;
+                font-size: 13px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: rgba({fg_rgb}, 0.1);
+            }}
+            QPushButton:checked {{
+                background-color: {self.theme['sel']};
+                color: {self.theme['fg']};
+                font-weight: bold;
+                border: 1px solid rgba({fg_rgb}, 0.15);
+            }}
+        """)
+
 class VPMTab(QWidget):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
         self.parent_app = parent
         self.theme = THEMES.get(settings.value("theme", "Dracula (Dark)"), THEMES["Dracula (Dark)"])
+        self.current_category = "all"
         
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(30, 30, 30, 30)
-        self.layout.setSpacing(20)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
         
-        # Toolbar
-        toolbar = QHBoxLayout()
+        # Header (formerly toolbar)
+        self.header = QFrame()
+        self.header.setFixedHeight(90)
+        self.header.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.1); border-bottom: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.2);")
+        header_layout = QHBoxLayout(self.header)
+        header_layout.setContentsMargins(35, 0, 35, 0)
+        
         title = QLabel("Package Manager")
         title.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {self.theme['fg']};")
-        toolbar.addWidget(title)
-        
-        toolbar.addStretch()
+        header_layout.addWidget(title)
+        header_layout.addStretch()
         
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search packages...")
-        self.search_bar.setFixedWidth(280)
-        self.search_bar.textChanged.connect(self.filter_packages)
+        self.search_bar.setFixedWidth(320)
+        self.search_bar.textChanged.connect(lambda: self.update_view())
         self.search_bar.setStyleSheet(f"""
             QLineEdit {{
                 background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.3);
-                border: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.5);
-                border-radius: 10px;
-                padding: 10px 15px;
+                border: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.4);
+                border-radius: 12px;
+                padding: 12px 18px;
                 color: {self.theme['fg']};
-                font-size: 12px;
+                font-size: 13px;
             }}
             QLineEdit:focus {{
                 border: 1px solid {self.theme['sel']};
+                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.5);
             }}
         """)
-        toolbar.addWidget(self.search_bar)
+        header_layout.addWidget(self.search_bar)
         
-        self.refresh_btn = QPushButton("Refresh Registry")
-        self.refresh_btn.setFixedWidth(140)
+        self.refresh_btn = QPushButton("↻ Refresh Registry")
+        self.refresh_btn.setFixedWidth(150)
         self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_btn.clicked.connect(self.refresh_data)
         self.refresh_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {self.theme['sel']};
                 color: {self.theme['fg']};
-                border-radius: 10px;
-                padding: 10px;
-                font-size: 12px;
+                border-radius: 12px;
+                padding: 12px;
+                font-size: 13px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
@@ -992,11 +1071,19 @@ class VPMTab(QWidget):
                 color: {self.theme['bg']};
             }}
         """)
-        toolbar.addWidget(self.refresh_btn)
+        header_layout.addWidget(self.refresh_btn)
+        self.main_layout.addWidget(self.header)
         
-        self.layout.addLayout(toolbar)
+        # Content (Sidebar + Grid)
+        self.content_layout = QHBoxLayout()
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
         
-        # Scroll Area
+        self.sidebar = VPMSidebar(self.theme)
+        self.sidebar.category_changed.connect(self.on_category_changed)
+        self.content_layout.addWidget(self.sidebar)
+        
+        # Grid area
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("background: transparent; border: none;")
@@ -1004,23 +1091,31 @@ class VPMTab(QWidget):
         self.container = QWidget()
         self.container.setStyleSheet("background: transparent;")
         self.grid = QGridLayout(self.container)
-        self.grid.setSpacing(15)
+        self.grid.setSpacing(25)
+        self.grid.setContentsMargins(35, 35, 35, 35)
         self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         
         self.scroll.setWidget(self.container)
-        self.layout.addWidget(self.scroll)
+        self.content_layout.addWidget(self.scroll)
+        
+        self.main_layout.addLayout(self.content_layout)
         
         self.cards = []
         self.refresh_data()
 
+    def on_category_changed(self, category):
+        self.current_category = category
+        self.update_view()
+
     def refresh_data(self):
         # Clear existing
         for i in reversed(range(self.grid.count())): 
-            self.grid.itemAt(i).widget().setParent(None)
+            w = self.grid.itemAt(i).widget()
+            if w: w.setParent(None)
         self.cards = []
         
-        loading = QLabel("Fetching latest packages from SNCloud...")
-        loading.setStyleSheet(f"color: {self.theme['border']}; font-style: italic;")
+        loading = QLabel("Connecting to SNCloud Registry...")
+        loading.setStyleSheet(f"color: {self.theme['border']}; font-size: 15px; font-style: italic;")
         self.grid.addWidget(loading, 0, 0)
         
         self.worker = VPMWorker()
@@ -1030,42 +1125,49 @@ class VPMTab(QWidget):
     def on_data_loaded(self, cloud_data, local_data):
         # Clear loading
         for i in reversed(range(self.grid.count())): 
-            self.grid.itemAt(i).widget().setParent(None)
+            w = self.grid.itemAt(i).widget()
+            if w: w.setParent(None)
             
         if not cloud_data:
-            err = QLabel("Failed to connect to SNCloud. Please check your internet connection.")
-            err.setStyleSheet("color: #ff5555;")
+            err = QLabel("Registry connection failed. Check SNCloud status.")
+            err.setStyleSheet("color: #ff5555; font-weight: bold; font-size: 14px;")
             self.grid.addWidget(err, 0, 0)
             return
 
-        # Sort: Official first, then name
         sorted_pkgs = sorted(cloud_data.items(), key=lambda x: ("✅" not in x[1].get('description', ''), x[0]))
-        
-        row, col = 0, 0
-        cols_count = max(1, self.width() // 320)
         
         for name, info in sorted_pkgs:
             card = VPMPackageCard(name, info, local_data, self.theme)
             card.action_triggered.connect(self.handle_action)
             self.cards.append(card)
-            self.grid.addWidget(card, row, col)
-            col += 1
-            if col >= cols_count:
-                col = 0
-                row += 1
+        
+        self.update_view()
 
-    def filter_packages(self, text):
-        text = text.lower()
-        # Hide all
+    def update_view(self):
+        # Hide all first
         for card in self.cards:
             card.hide()
             self.grid.removeWidget(card)
             
-        # Filter and re-add
-        filtered = [c for c in self.cards if text in c.name.lower() or text in c.info.get('description', '').lower()]
+        text = self.search_bar.text().lower()
+        cat = self.current_category
+        
+        filtered = []
+        for card in self.cards:
+            match_text = text in card.name.lower() or text in card.info.get('description', '').lower()
+            match_cat = True
+            if cat == "official": match_cat = card.is_official
+            elif cat == "installed": match_cat = card.local_ver is not None
+            elif cat == "updates": match_cat = card.update_available
+            
+            if match_text and match_cat:
+                filtered.append(card)
         
         row, col = 0, 0
-        cols_count = max(1, self.width() // 320)
+        # Dynamic columns based on available width
+        grid_width = self.scroll.width() - 80 
+        cols_count = max(1, grid_width // 360)
+        
         for card in filtered:
             card.show()
             self.grid.addWidget(card, row, col)
@@ -1076,36 +1178,30 @@ class VPMTab(QWidget):
 
     def handle_action(self, action, pkg_name):
         if action == "info":
-            # Just run the CLI command in a hidden way or show a dialog
-            # For now, let's just print to the active terminal if possible, 
-            # but better to show a dialog.
-            vpm.locate_package(pkg_name) # This prints, not ideal
+            vpm.locate_package(pkg_name)
             return
 
-        # For install/update/remove, we'll run the command in the background
-        # and refresh when done.
-        confirm = QMessageBox.question(self, "Confirm Action", f"Are you sure you want to {action} '{pkg_name}'?")
+        confirm = QMessageBox.question(self, "VPM Registry", f"Confirm {action} of '{pkg_name}'?")
         if confirm == QMessageBox.StandardButton.Yes:
             try:
                 if action == "install" or action == "update":
                     vpm.install_package(pkg_name)
                 elif action == "remove":
-                    # Manually handle removal as vpm.py remove expects CLI args
                     target = os.path.join(vpm.USER_CORE_DIR, f"{pkg_name}.py")
                     lib_target = os.path.join(vpm.USER_CORE_DIR, f"{pkg_name}_lib")
                     if os.path.exists(target): os.remove(target)
                     if os.path.exists(lib_target): shutil.rmtree(lib_target)
                     vpm.remove_wrapper(pkg_name)
                 
-                QMessageBox.information(self, "Success", f"Successfully {action}ed '{pkg_name}'!")
+                QMessageBox.information(self, "VPM Success", f"Package '{pkg_name}' {action}ed successfully.")
                 self.refresh_data()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to {action} '{pkg_name}': {e}")
+                QMessageBox.critical(self, "VPM Error", f"Operation failed: {e}")
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self.cards:
-            self.filter_packages(self.search_bar.text())
+        if hasattr(self, 'cards') and self.cards:
+            self.update_view()
 
 class SettingsTab(QWidget):
 
