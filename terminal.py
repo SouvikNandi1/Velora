@@ -1,4 +1,4 @@
-__version__ = "1.82.5"
+__version__ = "1.83.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -834,7 +834,119 @@ class SettingsTab(QWidget):
                 pass
             self.history_cleared.emit()
 
+
+class _UpdateCheckerWorker(QThread):
+    """Background thread: checks for terminal + package updates without blocking startup."""
+    result_ready = pyqtSignal(str)
+
+    def __init__(self, local_version, parent=None):
+        super().__init__(parent)
+        self.local_version = local_version
+
+    def _is_newer(self, cloud_ver, local_ver):
+        try:
+            return [int(x) for x in cloud_ver.split('.')] > [int(x) for x in local_ver.split('.')]
+        except Exception:
+            return cloud_ver != local_ver
+
+    def run(self):
+        import ssl, urllib.request, json, time, re, os, sys, platform
+        try:
+            import vpm
+            project_id, api_key = vpm.get_remote_credentials()
+        except Exception:
+            return
+
+        if not project_id or not api_key:
+            return
+
+        ctx = ssl._create_unverified_context()
+        headers = {'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'}
+        ts = int(time.time())
+
+        system = platform.system()
+        if system == "Windows":
+            bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
+        else:
+            bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
+
+        info_msg = ""
+        updates_found = False
+
+        # --- Terminal / bootstrap version check ---
+        try:
+            req = urllib.request.Request(
+                f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={ts}", headers=headers)
+            with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                if isinstance(data, dict):
+                    cloud_ver = data.get('version', '1.0.0').strip()
+                    if self._is_newer(cloud_ver, self.local_version):
+                        updates_found = True
+                        info_msg += "\r\n\x1b[33;1m╔══ ⬆  Update Available ═══════════════════════════╗\x1b[0m\r\n"
+                        info_msg += f"\x1b[33;1m║  Terminal  \x1b[97mv{self.local_version}\x1b[33m  →  \x1b[32mv{cloud_ver}  \x1b[33;1m║\x1b[0m\r\n"
+                        info_msg += "\x1b[33;1m╚══════════════════════════════════════════════════╝\x1b[0m\r\n"
+                        info_msg += f"  \x1b[90mRun: \x1b[32;1mvpm upgrade\x1b[0m\x1b[90m  or bootstrap:\x1b[0m\r\n"
+                        info_msg += f"  \x1b[32m{bootstrap_cmd}\x1b[0m\r\n\r\n"
+        except Exception:
+            pass
+
+        # --- Package updates check: scan ALL locally installed files first ---
+        try:
+            req = urllib.request.Request(
+                f"https://sncloud.in/api/db/{project_id}/packages.json?_t={ts}", headers=headers)
+            with urllib.request.urlopen(req, context=ctx, timeout=5) as resp:
+                cloud_registry = json.loads(resp.read().decode('utf-8'))
+
+            if isinstance(cloud_registry, dict):
+                user_core_dir = os.path.expanduser("~/.velora/core")
+                bundled_core_dir = os.path.join(
+                    getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.argv[0]))), 'core')
+
+                # Collect every locally installed package file, prefer user dir over bundled
+                local_files = {}
+                for search_dir in [bundled_core_dir, user_core_dir]:
+                    if os.path.isdir(search_dir):
+                        for fpath in os.listdir(search_dir):
+                            if fpath.endswith('.py'):
+                                pkg_name = fpath[:-3]  # strip .py
+                                local_files[pkg_name] = os.path.join(search_dir, fpath)
+
+                pkg_updates = []
+                for pkg_name, local_path in local_files.items():
+                    if pkg_name not in cloud_registry:
+                        continue  # not a cloud package, skip
+                    cloud_info = cloud_registry[pkg_name]
+                    if not isinstance(cloud_info, dict):
+                        continue
+                    cloud_pkg_ver = cloud_info.get('version', '1.0.0').strip()
+                    try:
+                        with open(local_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']',
+                                      content, re.MULTILINE)
+                        local_pkg_ver = m.group(1).strip() if m else '1.0.0'
+                        if self._is_newer(cloud_pkg_ver, local_pkg_ver):
+                            pkg_updates.append((pkg_name, local_pkg_ver, cloud_pkg_ver))
+                    except Exception:
+                        pass
+
+                if pkg_updates:
+                    updates_found = True
+                    info_msg += "\x1b[36;1m  📦 Package updates available:\x1b[0m\r\n"
+                    for pkg, lv, cv in sorted(pkg_updates):
+                        info_msg += (f"  \x1b[32m◆ {pkg:<14}\x1b[0m "
+                                     f"\x1b[90mv{lv} → \x1b[32mv{cv}\x1b[0m\r\n")
+                    info_msg += "  \x1b[90mRun \x1b[32;1mvpm update-all\x1b[0m\x1b[90m to update all\x1b[0m\r\n\r\n"
+        except Exception:
+            pass
+
+        if updates_found:
+            self.result_ready.emit(info_msg)
+
+
 class TerminalSession(QWidget):
+
     zoom_changed = pyqtSignal(int)
     settings_requested = pyqtSignal()
     session_closed = pyqtSignal()
@@ -944,103 +1056,16 @@ class TerminalSession(QWidget):
         )
         self.insert_ansi_text(ascii_logo)
         
-        # Show startup information
-        self.show_startup_info()
+        # Kick off async update check — never blocks startup
+        self._start_async_update_check()
 
-    def show_startup_info(self):
-        """Display startup information only if updates are available"""
-        info_msg = ""
-        updates_found = False
-        
-        # Determine system-specific bootstrap command
-        system = platform.system()
-        if system == "Windows":
-            bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
-        else:
-            bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
-        
-        # Check for bootstrap/terminal updates
-        try:
-            import vpm
-            project_id, api_key = vpm.get_remote_credentials()
-            if project_id and api_key:
-                import ssl
-                import urllib.request
-                import json
-                import time
-                
-                ctx = ssl._create_unverified_context()
-                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}", 
-                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
-                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    if data and isinstance(data, dict):
-                        cloud_app_ver = data.get('version', '1.0.0').strip()
-                        if self.is_newer_version(cloud_app_ver, __version__):
-                            updates_found = True
-                            info_msg += "\x1b[36;1m═══ Bootstrap Update Available ═══\x1b[0m\r\n"
-                            info_msg += f"\x1b[32;1m{bootstrap_cmd}\x1b[0m\r\n"
-                            info_msg += "\x1b[90mRun this command to update Velora from the latest repository\x1b[0m\r\n\r\n"
-        except:
-            pass  # Silently fail if update check fails
-        
-        # Check for package updates
-        pkg_updates = []
-        try:
-            import vpm
-            project_id, api_key = vpm.get_remote_credentials()
-            if project_id and api_key:
-                import ssl
-                import urllib.request
-                import json
-                import time
-                
-                ctx = ssl._create_unverified_context()
-                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
-                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
-                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    if isinstance(data, dict):
-                        core_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core')
-                        user_core_dir = os.path.expanduser("~/.velora/core")
-                        
-                        for pkg, info in data.items():
-                            if isinstance(info, dict):
-                                cloud_ver = info.get('version', '1.0.0').strip()
-                                local_user = os.path.join(user_core_dir, f"{pkg}.py")
-                                local_bundled = os.path.join(core_dir, f"{pkg}.py")
-                                local_path = local_user if os.path.exists(local_user) else local_bundled
-                                
-                                if os.path.exists(local_path):
-                                    try:
-                                        with open(local_path, 'r', encoding='utf-8') as f:
-                                            content = f.read()
-                                        m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-                                        local_ver = m.group(1).strip() if m else "1.0.0"
-                                        if self.is_newer_version(cloud_ver, local_ver):
-                                            pkg_updates.append(pkg)
-                                    except:
-                                        pass
-                        
-                        if pkg_updates:
-                            updates_found = True
-                            info_msg += "\x1b[36;1m═══ Package Updates Available ═══\x1b[0m\r\n"
-                            for pkg in pkg_updates:
-                                info_msg += f"\x1b[32m• {pkg}\x1b[0m\r\n"
-                            info_msg += "\r\n\x1b[36mRun \x1b[32;1mvpm update-all\x1b[36m to update all packages\x1b[0m\r\n\r\n"
-        except:
-            pass  # Silently fail if package check fails
-        
-        # Only show update commands if updates were found
-        if updates_found:
-            info_msg += "\x1b[36;1m═══ Update Commands ═══\x1b[0m\r\n"
-            info_msg += "\x1b[32;1mvpm upgrade\x1b[0m         - Update the terminal application\r\n"
-            info_msg += "\x1b[32;1mvpm update-all\x1b[0m     - Update all installed packages\r\n"
-            info_msg += "\x1b[32;1mvpm list\x1b[0m            - Browse available packages\r\n"
-            info_msg += "\x1b[32;1mvpm info <package>\x1b[0m  - Get package details\r\n"
-            
-            self.insert_ansi_text(info_msg)
-    
+    def _start_async_update_check(self):
+        """Run the update check in a background thread so startup is instant."""
+        self._update_worker = _UpdateCheckerWorker(__version__)
+        self._update_worker.result_ready.connect(self.insert_ansi_text)
+        self._update_worker.finished.connect(self._update_worker.deleteLater)
+        self._update_worker.start()
+
     def is_newer_version(self, cloud_ver, local_ver):
         """Check if cloud version is newer than local version"""
         try:
