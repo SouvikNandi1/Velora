@@ -3,20 +3,6 @@ __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
 
-def clean_version(v):
-    if not v: return "0.0.0"
-    v = str(v).strip().lower().lstrip('v')
-    return re.sub(r'[^0-9.]', '', v)
-
-def is_newer(cloud_v, local_v):
-    c = clean_version(cloud_v)
-    l = clean_version(local_v)
-    try:
-        cp = [int(x) for x in c.split('.') if x.isdigit()]
-        lp = [int(x) for x in l.split('.') if x.isdigit()]
-        return cp > lp
-    except:
-        return c != l
 
 import sys
 import os
@@ -162,6 +148,23 @@ import ssl
 import time
 
 HISTORY_FILE = os.path.expanduser("~/.velora_history")
+
+def clean_version(v):
+    if not v: return "0.0.0"
+    v = str(v).strip().lower().lstrip('v')
+    return re.sub(r'[^0-9.]', '', v)
+
+def is_newer(cloud_v, local_v):
+    c = clean_version(cloud_v)
+    l = clean_version(local_v)
+    try:
+        cp = [int(x) for x in c.split('.') if x.isdigit()]
+        lp = [int(x) for x in l.split('.') if x.isdigit()]
+        while len(cp) < 3: cp.append(0)
+        while len(lp) < 3: lp.append(0)
+        return cp > lp
+    except Exception:
+        return c != l
 
 def encrypt_history_data(text):
     key = b"velora_history_123"
@@ -1405,6 +1408,74 @@ class SettingsTab(QWidget):
                 pass
             self.history_cleared.emit()
 
+class StartupInfoWorker(QThread):
+    finished = pyqtSignal(str)
+
+    def run(self):
+        msg = ""
+        try:
+            project_id, api_key = vpm.get_remote_credentials()
+            if not project_id or not api_key: return
+            
+            ctx = ssl._create_unverified_context()
+            system = platform.system()
+            if system == "Windows":
+                bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
+            else:
+                bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
+
+            # Check App
+            req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}", 
+                                       headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+            with urllib.request.urlopen(req, context=ctx, timeout=4) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                if data and isinstance(data, dict):
+                    cloud_app_ver = data.get('version', '1.0.0').strip()
+                    if is_newer(cloud_app_ver, __version__):
+                        msg += f"\r\n{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Bootstrap Update Available ═══{terminal_utils.RESET}\r\n"
+                        msg += f"{terminal_utils.GREEN}{bootstrap_cmd}{terminal_utils.RESET}\r\n"
+                        msg += f"{terminal_utils.GREY}Run this command to update Velora from the latest repository{terminal_utils.RESET}\r\n\r\n"
+
+            # Check Packages
+            req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
+                                       headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
+            with urllib.request.urlopen(req, context=ctx, timeout=4) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                if isinstance(data, dict):
+                    core_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core')
+                    user_core_dir = os.path.expanduser("~/.velora/core")
+                    pkg_updates = []
+                    
+                    for pkg, info in data.items():
+                        if isinstance(info, dict):
+                            cloud_ver = info.get('version', '1.0.0').strip()
+                            local_user = os.path.join(user_core_dir, f"{pkg}.py")
+                            local_bundled = os.path.join(core_dir, f"{pkg}.py")
+                            local_path = local_user if os.path.exists(local_user) else local_bundled
+                            
+                            if os.path.exists(local_path):
+                                try:
+                                    with open(local_path, 'r', encoding='utf-8') as f: content = f.read()
+                                    m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+                                    local_ver = m.group(1).strip() if m else "1.0.0"
+                                    if is_newer(cloud_ver, local_ver):
+                                        pkg_updates.append(pkg)
+                                except: pass
+                    
+                    if pkg_updates:
+                        msg += f"{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Package Updates Available ═══{terminal_utils.RESET}\r\n"
+                        for p in pkg_updates: msg += f"{terminal_utils.PINK}• {p}{terminal_utils.RESET}\r\n"
+                        msg += f"\r\n{terminal_utils.CYAN}Run {terminal_utils.GREEN}vpm update-all{terminal_utils.CYAN} to update all packages{terminal_utils.RESET}\r\n\r\n"
+
+            if msg:
+                summary = f"{terminal_utils.BOLD}{terminal_utils.PURPLE}═══ Quick Update Commands ═══{terminal_utils.RESET}\r\n"
+                summary += f"{terminal_utils.GREEN}vpm upgrade{terminal_utils.RESET}         - Update the terminal application\r\n"
+                summary += f"{terminal_utils.GREEN}vpm update-all{terminal_utils.RESET}     - Update all installed packages\r\n\r\n"
+                msg += summary
+
+            self.finished.emit(msg)
+        except Exception: pass
+
 class TerminalSession(QWidget):
     zoom_changed = pyqtSignal(int)
     settings_requested = pyqtSignal()
@@ -1515,87 +1586,12 @@ class TerminalSession(QWidget):
         )
         self.insert_ansi_text(ascii_logo)
         
-        # Show startup information
-        self.show_startup_info()
+        # Async startup info (Check for updates in background)
+        self.info_worker = StartupInfoWorker()
+        self.info_worker.finished.connect(self.insert_ansi_text)
+        self.info_worker.start()
 
-    def show_startup_info(self):
-        """Display startup information only if updates are available"""
-        updates_found = False
-        
-        # Determine system-specific bootstrap command
-        system = platform.system()
-        if system == "Windows":
-            bootstrap_cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
-        else:
-            bootstrap_cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
-        
-        # Check for bootstrap/terminal updates
-        try:
-            project_id, api_key = vpm.get_remote_credentials()
-            if project_id and api_key:
-                ctx = ssl._create_unverified_context()
-                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}", 
-                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
-                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    if data and isinstance(data, dict):
-                        cloud_app_ver = data.get('version', '1.0.0').strip()
-                        if self.is_newer_version(cloud_app_ver, __version__):
-                            updates_found = True
-                            self.insert_ansi_text(f"\r\n{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Bootstrap Update Available ═══{terminal_utils.RESET}\r\n")
-                            self.insert_ansi_text(f"{terminal_utils.GREEN}{bootstrap_cmd}{terminal_utils.RESET}\r\n")
-                            self.insert_ansi_text(f"{terminal_utils.GREY}Run this command to update Velora from the latest repository{terminal_utils.RESET}\r\n\r\n")
-        except: pass
-        
-        # Check for package updates
-        pkg_updates = []
-        try:
-            project_id, api_key = vpm.get_remote_credentials()
-            if project_id and api_key:
-                ctx = ssl._create_unverified_context()
-                req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
-                                           headers={'User-Agent': 'Velora/1.0', 'X-API-Key': api_key, 'Cache-Control': 'no-cache'})
-                with urllib.request.urlopen(req, context=ctx, timeout=3) as response:
-                    data = json.loads(response.read().decode('utf-8'))
-                    if isinstance(data, dict):
-                        core_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'core')
-                        user_core_dir = os.path.expanduser("~/.velora/core")
-                        
-                        for pkg, info in data.items():
-                            if isinstance(info, dict):
-                                cloud_ver = info.get('version', '1.0.0').strip()
-                                local_user = os.path.join(user_core_dir, f"{pkg}.py")
-                                local_bundled = os.path.join(core_dir, f"{pkg}.py")
-                                local_path = local_user if os.path.exists(local_user) else local_bundled
-                                
-                                if os.path.exists(local_path):
-                                    try:
-                                        with open(local_path, 'r', encoding='utf-8') as f:
-                                            content = f.read()
-                                        m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-                                        local_ver = m.group(1).strip() if m else "1.0.0"
-                                        if self.is_newer_version(cloud_ver, local_ver):
-                                            pkg_updates.append(pkg)
-                                    except: pass
-                        
-                        if pkg_updates:
-                            updates_found = True
-                            self.insert_ansi_text(f"{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Package Updates Available ═══{terminal_utils.RESET}\r\n")
-                            for pkg in pkg_updates:
-                                self.insert_ansi_text(f"{terminal_utils.PINK}• {pkg}{terminal_utils.RESET}\r\n")
-                            self.insert_ansi_text(f"\r\n{terminal_utils.CYAN}Run {terminal_utils.GREEN}vpm update-all{terminal_utils.CYAN} to update all packages{terminal_utils.RESET}\r\n\r\n")
-        except: pass
-        
-        # Only show update summary if updates were found
-        if updates_found:
-            self.insert_ansi_text(f"{terminal_utils.BOLD}{terminal_utils.PURPLE}═══ Quick Update Commands ═══{terminal_utils.RESET}\r\n")
-            self.insert_ansi_text(f"{terminal_utils.GREEN}vpm upgrade{terminal_utils.RESET}         - Update the terminal application\r\n")
-            self.insert_ansi_text(f"{terminal_utils.GREEN}vpm update-all{terminal_utils.RESET}     - Update all installed packages\r\n")
-            self.insert_ansi_text(f"{terminal_utils.GREEN}vpm list{terminal_utils.RESET}            - Browse available packages\r\n")
-            self.insert_ansi_text("\r\n")
-    
     def is_newer_version(self, cloud_ver, local_ver):
-        """Check if cloud version is newer than local version"""
         return is_newer(cloud_ver, local_ver)
 
     def on_terminal_resize(self, rows, cols):
@@ -2360,12 +2356,7 @@ class UpdateChecker(QThread):
             self.update_notif.emit(pkg_updates, app_update)
 
     def is_newer(self, cloud_ver, local_ver):
-        cloud_ver = cloud_ver.strip()
-        local_ver = local_ver.strip()
-        try:
-            c_parts, l_parts = [int(x) for x in cloud_ver.split('.')], [int(x) for x in local_ver.split('.')]
-            return c_parts > l_parts
-        except Exception: return cloud_ver != local_ver
+        return is_newer(cloud_ver, local_ver)
 
 class TerminalApp(QMainWindow):
     def __init__(self):
