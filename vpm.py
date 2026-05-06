@@ -1,4 +1,4 @@
-__version__ = "1.17.1"
+__version__ = "1.17.2"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -18,6 +18,18 @@ PROJECT_ID = None
 API_KEY = None
 CREDENTIALS_PATH = os.path.expanduser("~/.velora/vpm_secrets.json")
 LOCAL_CREDENTIALS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".velora", "vpm_secrets.json")
+ENC_PROJECT_ID = "NAdaDRZYMUY="
+ENC_API_KEY = "JQszWEBYMBEVVhFiVAJMRgYpVhh+XkUqVlQWEAJXQlwJV1c="
+
+
+def _vd(s):
+    key = b"VeloraSuperSecureKeyForObfuscation2026!"
+    try:
+        enc = base64.b64decode(s)
+        return bytes(b ^ key[i % len(key)] for i, b in enumerate(enc)).decode('utf-8')
+    except Exception:
+        return s
+
 
 def get_remote_credentials():
     project_id = os.getenv("VELORA_SN_PROJECT_ID")
@@ -36,6 +48,11 @@ def get_remote_credentials():
                     return project_id, api_key
             except Exception:
                 pass
+
+    project_id = project_id or _vd(ENC_PROJECT_ID)
+    api_key = api_key or _vd(ENC_API_KEY)
+    if project_id and api_key:
+        return project_id, api_key
 
     raise RuntimeError(
         "Missing VPM credentials. Set VELORA_SN_PROJECT_ID and VELORA_SN_API_KEY "
@@ -60,7 +77,12 @@ def get_request(url, data=None, method=None):
 
 IS_FROZEN = getattr(sys, 'frozen', False)
 if IS_FROZEN: BUNDLED_CORE_DIR = os.path.join(getattr(sys, '_MEIPASS'), 'core')
-else: BUNDLED_CORE_DIR = os.path.dirname(os.path.abspath(__file__))
+else: 
+    _base = os.path.dirname(os.path.abspath(__file__))
+    if os.path.exists(os.path.join(_base, 'core')):
+        BUNDLED_CORE_DIR = os.path.join(_base, 'core')
+    else:
+        BUNDLED_CORE_DIR = _base
 
 USER_CORE_DIR = os.path.expanduser("~/.velora/core")
 os.makedirs(USER_CORE_DIR, exist_ok=True)

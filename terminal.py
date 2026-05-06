@@ -1,4 +1,4 @@
-__version__ = "1.74.0"
+__version__ = "1.77.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -31,6 +31,10 @@ import shutil
 import platform
 import string
 import urllib.parse
+import urllib.request
+import json
+import ssl
+import vpm
 
 # -- NATIVE COMPILED CORE EXECUTOR --
 if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
@@ -1493,9 +1497,11 @@ class UpdateChecker(QThread):
     def run(self):
         app_update = False
         pkg_updates = []
-        project_id = "bb6bd9b3"
-        api_key = "sn_729cde3c11a94cb3a817e42cca665f9e"
-        
+        try:
+            project_id, api_key = vpm.get_remote_credentials()
+        except Exception:
+            return
+
         try:
             ctx = ssl._create_unverified_context()
             

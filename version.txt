@@ -777,3 +777,8 @@ v1.76.4
 v1.76.5
 - Fixed persistent HTTP Error 400 in `vpm publish-main` by correcting the XOR-Base64 obfuscation strings for `PROJECT_ID` and `API_KEY`.
 - Validated that `DAMZDRZYMUU=` correctly resolves to `bb6bd9b3` and `JQshWFBOWDAREhVWFWJUAlxCBiJWGBoSXkFqUlRSUhASEktCVAgXV1c=` resolves to the provided SNCloud API key.
+
+v1.77.0
+- Fixed a bug in `vpm publish-main` where it was incorrectly publishing root project files (bootstrap, build, terminal, install) instead of the programs inside the `core/` directory when running from source.
+- Refactored `vpm.py` directory resolution to correctly identify the `core/` subdirectory for bundled core programs.
+- Bumped VPM core version to `v1.17.2`.
