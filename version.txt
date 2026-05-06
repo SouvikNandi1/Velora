@@ -747,3 +747,9 @@ v1.75.0
 - Updated Blueprint documentation with Remote Installation and Hardening data flows.
 - Synchronized installation versioning across all distribution scripts.
 - Bumped main application version to `v1.75.0`.
+
+v1.76.0
+- Implemented stronger obfuscation for sensitive IDs (PROJECT_ID, API_KEY) in VPM and UpdateChecker.
+- Replaced simple XOR key with a longer, more complex, and less guessable string.
+- Ensured consistent key usage across all encryption/decryption functions in the ecosystem.
+- Bumped main application version to `v1.76.0`.

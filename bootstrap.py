@@ -6,7 +6,7 @@ import shutil
 import urllib.request
 import base64
 
-VERSION = "1.75.0"
+VERSION = "1.76.0"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
 INSTALL_DIR = os.path.expanduser("~/.velora/app")
 
@@ -19,18 +19,18 @@ def encrypt_file(file_path):
         if "# Velora Encrypted" in content:
             return # Already protected
 
-        key = b"velora_secure_123"
+        key = b"VeloraSuperSecureKeyForObfuscation2026!" # Longer, more complex key
         data = content.encode('utf-8')
-        enc = bytes(b ^ key[i % 17] for i, b in enumerate(data))
+        enc = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
         b64_payload = base64.b64encode(enc).decode('utf-8')
 
         stub = (
             "# Velora Encrypted Source\n"
             "import base64, sys, os\n"
             f"__payload__ = '{b64_payload}'\n"
-            "def _load():\n"
-            "    k = b'velora_secure_123'; e = base64.b64decode(__payload__)\n"
-            "    d = bytes(b ^ k[i % 17] for i, b in enumerate(e)).decode('utf-8')\n"
+            "def _load():\n" # The stub itself needs to use the same key and logic
+            "    k = b'VeloraSuperSecureKeyForObfuscation2026!'; e = base64.b64decode(__payload__)\n"
+            "    d = bytes(b ^ k[i % len(k)] for i, b in enumerate(e)).decode('utf-8')\n"
             "    exec(d, globals())\n"
             "if __name__ == '__main__': _load()\n"
         )

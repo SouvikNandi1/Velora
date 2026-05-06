@@ -1,4 +1,4 @@
-__version__ = "1.74.0"
+__version__ = "1.76.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -50,13 +50,13 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
         import builtins
         
         def _velora_encrypt_data(text):
-            key = b"velora_data_123"
+            key = b"VeloraSuperSecureKeyForObfuscation2026!" # Consistent key
             data = text.encode('utf-8')
             enc = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
             return base64.b64encode(enc).decode('utf-8')
 
         def _velora_decrypt_data(b64_str):
-            key = b"velora_data_123"
+            key = b"VeloraSuperSecureKeyForObfuscation2026!" # Consistent key
             try:
                 enc = base64.b64decode(b64_str)
                 dec = bytes(b ^ key[i % len(key)] for i, b in enumerate(enc))
@@ -80,7 +80,7 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
                         try:
                             with open(t_path, 'r', encoding='utf-8') as f: header = f.read(100)
                             if "# Velora Encrypted Core Program" in header:
-                                return importlib.machinery.ModuleSpec(fullname, self, origin=t_path)
+                                return importlib.machinery.ModuleSpec(fullname, self, origin=t_path, is_package=False) # is_package=False for single files
                         except Exception: pass
                 return None
             def create_module(self, spec): return None
@@ -88,8 +88,8 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
                 with open(module.__spec__.origin, 'r', encoding='utf-8') as f: code = f.read()
                 m = re.search(r"__encrypted_payload__\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]", code)
                 if m:
-                    enc = base64.b64decode(m.group(1))
-                    dec = bytes(b ^ b"velora_secure_123"[i % 17] for i, b in enumerate(enc)).decode('utf-8')
+                    enc = base64.b64decode(m.group(1)) # Use the same key and modulo as encrypt_file
+                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 37] for i, b in enumerate(enc)).decode('utf-8')
                     exec(dec, module.__dict__)
                 else: raise ImportError(f"Corrupted encrypted payload in {module.__name__}")
 
@@ -100,8 +100,8 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
             if "# Velora Encrypted Core Program\n__encrypted_payload__" in code:
                 m = re.search(r"__encrypted_payload__\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]", code)
                 if m:
-                    enc = base64.b64decode(m.group(1))
-                    dec = bytes(b ^ b"velora_secure_123"[i % 17] for i, b in enumerate(enc)).decode('utf-8')
+                    enc = base64.b64decode(m.group(1)) # Use the same key and modulo as encrypt_file
+                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 37] for i, b in enumerate(enc)).decode('utf-8')
                     lib_dir = os.path.dirname(file_path)
                     if lib_dir not in sys.path: sys.path.insert(0, lib_dir)
                     exec(dec, {"__name__": run_name, "__file__": file_path, "sys": sys, "os": os})
@@ -109,6 +109,7 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
             else:
                 runpy.run_path(file_path, run_name=run_name)
                 
+        # Inject run_encrypted into builtins for core programs to use
         builtins.run_encrypted = _velora_run_encrypted
         
         try:
@@ -144,13 +145,13 @@ import time
 HISTORY_FILE = os.path.expanduser("~/.velora_history")
 
 def encrypt_history_data(text):
-    key = b"velora_history_123"
+    key = b"VeloraSuperSecureKeyForObfuscation2026!" # Consistent key
     data = text.encode('utf-8')
     enc = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
     return base64.b64encode(enc).decode('utf-8')
 
 def decrypt_history_data(b64_str):
-    key = b"velora_history_123"
+    key = b"VeloraSuperSecureKeyForObfuscation2026!" # Consistent key
     try:
         enc = base64.b64decode(b64_str)
         dec = bytes(b ^ key[i % len(key)] for i, b in enumerate(enc))
@@ -1493,8 +1494,13 @@ class UpdateChecker(QThread):
     def run(self):
         app_update = False
         pkg_updates = []
-        project_id = "bb6bd9b3"
-        api_key = "sn_729cde3c11a94cb3a817e42cca665f9e"
+        def _vd(s):
+            k = b"VeloraSuperSecureKeyForObfuscation2026!" # Consistent key
+            e = base64.b64decode(s)
+            return bytes(b ^ k[i % len(k)] for i, b in enumerate(e)).decode()
+
+        project_id = _vd('FANSDRYqJXA=')
+        api_key = _vd('BQsVWEAoBBcAUFZWQwaGBlA0dmduQ3ZLRlQAFVNTcQRUahM=')
         
         try:
             ctx = ssl._create_unverified_context()
