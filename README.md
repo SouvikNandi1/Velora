@@ -40,9 +40,16 @@ curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.p
 ```
 
 ### 🪟 Windows
-Open **PowerShell** (not CMD) and run:
+#### Option 1: PowerShell (Recommended)
+Open **PowerShell** and run:
 ```powershell
 cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py
+```
+
+#### Option 2: Command Prompt (CMD)
+Open **Command Prompt** and run:
+```cmd
+cd %USERPROFILE% && powershell.exe -Command "Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py" && python bootstrap.py
 ```
 
 ---
