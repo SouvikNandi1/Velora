@@ -1,4 +1,4 @@
-__version__ = "2.2.2"
+__version__ = "2.5.0"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"

@@ -1,4 +1,4 @@
-__version__ = "2.2.0"
+__version__ = "2.5.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -1544,7 +1544,7 @@ class TerminalSession(QWidget):
         env.insert("COLORTERM", "truecolor")
         env.insert("VELORA_PYTHON", sys.executable)
         env.insert("VELORA_CORE", os.path.expanduser("~/.velora/core"))
-        env.insert("VELORA_VERSION", "2.2.0")
+        env.insert("VELORA_VERSION", "2.5.0")
         env.insert("VELORA_TERMINAL_PATH", os.path.abspath(sys.argv[0]))
         
         # Inject native wrappers into PATH
