@@ -1,4 +1,4 @@
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __description__ = "Centralized styling and UI utility for Velora Terminal."
 __author__ = "Souvik"
 __website__ = ""

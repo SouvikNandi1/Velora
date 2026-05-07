@@ -839,6 +839,11 @@ v2.1.0
 - Enhanced VPM UI with section headers, emojis, and better data visualization.
 - Synchronized ecosystem-wide versioning to v2.1.0 for Terminal, VPM, and Bootstrap.
 
+v2.1.2
+- CRITICAL: Synchronized all residual encryption keys in `vpm.py` to the master 39-character key.
+- Updated obfuscated API credentials to maintain cloud connectivity.
+- Corrected pathing logic for frozen binaries on Linux systems.
+
 v2.1.1
 - HOTFIX: Fully migrated `terminal_utils` to `velora_utils` to prevent module name collisions on Linux/Ubuntu systems.
 - Synchronized all internal encryption keys (39-character key) across Terminal, VPM, and Bootstrap.

@@ -323,7 +323,7 @@ def list_local_packages():
     
     # Add Terminal app to System category
     if "🖥️ System" not in categories: categories["🖥️ System"] = []
-    term_ver = os.environ.get("VELORA_VERSION", "2.0.x")
+    term_ver = os.environ.get("VELORA_VERSION", "2.1.2")
     categories["🖥️ System"].append({
         "name": "Velora Terminal",
         "version": term_ver,
@@ -401,7 +401,7 @@ def install_package(pkg_name):
             
             exec_logic = f"import os, sys\nlib_dir = os.path.join(os.path.dirname(__file__), '{pkg_name}_lib')\nentry_file = os.path.join(lib_dir, '{entry}')\nrun_encrypted(entry_file, run_name='__main__')\n"
             
-            key = b"velora_secure_123"
+            key = b"VeloraSuperSecureKeyForObfuscation2026!"
             code_bytes = exec_logic.encode('utf-8')
             enc = bytes(b ^ key[i % len(key)] for i, b in enumerate(code_bytes))
             b64_code = base64.b64encode(enc).decode('utf-8')
@@ -444,7 +444,7 @@ def install_package(pkg_name):
             w_match = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
             if w_match: website = w_match.group(1)
             
-            key = b"velora_secure_123"
+            key = b"VeloraSuperSecureKeyForObfuscation2026!"
             code_bytes = code.encode('utf-8')
             enc = bytes(b ^ key[i % len(key)] for i, b in enumerate(code_bytes))
             b64_code = base64.b64encode(enc).decode('utf-8')
@@ -761,7 +761,7 @@ def publish_package(pkg_name, file_path, description="", entry_file=""):
                                 m = re.search(r"__encrypted_payload__\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]", code)
                                 if m:
                                     enc = base64.b64decode(m.group(1))
-                                    key = b"velora_secure_123"
+                                    key = b"VeloraSuperSecureKeyForObfuscation2026!"
                                     raw = bytes(b ^ key[i % len(key)] for i, b in enumerate(enc))
                         except Exception: pass
                         
@@ -793,7 +793,7 @@ def publish_package(pkg_name, file_path, description="", entry_file=""):
                 if m:
                     try:
                         enc = base64.b64decode(m.group(1))
-                        key = b"velora_secure_123"
+                        key = b"VeloraSuperSecureKeyForObfuscation2026!"
                         code = bytes(b ^ key[i % len(key)] for i, b in enumerate(enc)).decode('utf-8')
                     except Exception:
                         pass
