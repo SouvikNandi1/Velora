@@ -30,8 +30,8 @@ def print_header():
       ░     ░  ░    ░  ░    ░ ░     ░           ░  ░
      ░                                              \x1b[0m"""
     print(banner)
-    print(f"  \x1b[38;5;51m\x1b[1m⚡ VELORA SYSTEM INSTALLER \x1b[0m\x1b[90m│ v{VERSION}\x1b[0m")
-    print(f"  \x1b[90m" + "─" * 45 + "\x1b[0m\n")
+    print(f"  {C_CYAN}{C_BOLD}⚡ VELORA SYSTEM INSTALLER {C_RESET}{C_GREY}│ v{VERSION}{C_RESET}")
+    print(f"  {C_GREY}" + "─" * 45 + f"{C_RESET}\n")
 
 class Spinner:
     def __init__(self, message="Processing"):
@@ -43,7 +43,7 @@ class Spinner:
 
     def _spin(self):
         while self.running:
-            sys.stdout.write(f"\r  \x1b[38;5;51m{next(self.spinner)}\x1b[0m \x1b[90m{self.message}...\x1b[0m" + " " * 5)
+            sys.stdout.write(f"\r  {C_CYAN}{next(self.spinner)}{C_RESET} {C_GREY}{self.message}...{C_RESET}" + " " * 5)
             sys.stdout.flush()
             time.sleep(self.delay)
 
@@ -62,6 +62,18 @@ class Spinner:
 
 _current_spinner = None
 
+# Vibrant Color Palette
+C_PURPLE = "\x1b[38;2;189;147;249m"
+C_CYAN   = "\x1b[38;2;139;233;253m"
+C_GREEN  = "\x1b[38;2;80;250;123m"
+C_PINK   = "\x1b[38;2;255;121;198m"
+C_ORANGE = "\x1b[38;2;255;184;108m"
+C_RED    = "\x1b[38;2;255;85;85m"
+C_YELLOW = "\x1b[38;2;241;250;140m"
+C_GREY   = "\x1b[38;2;98;114;164m"
+C_RESET  = "\x1b[0m"
+C_BOLD   = "\x1b[1m"
+
 def log_step(msg):
     global _current_spinner
     if _current_spinner:
@@ -75,17 +87,17 @@ def log_done(msg):
         _current_spinner.stop(msg)
         _current_spinner = None
     else:
-        print(f"  \x1b[32m✔\x1b[0m \x1b[97m{msg}" + " " * 20)
+        print(f"  {C_GREEN}✔{C_RESET} {C_BOLD}{msg}{C_RESET}" + " " * 20)
 
 def log_info(msg):
-    print(f"  \x1b[34mℹ\x1b[0m \x1b[90m{msg}\x1b[0m")
+    print(f"  {C_CYAN}ℹ{C_RESET} {C_GREY}{msg}{C_RESET}")
 
 def log_error(msg):
     global _current_spinner
     if _current_spinner:
         _current_spinner.stop()
         _current_spinner = None
-    print(f"\n  \x1b[31;1m✖\x1b[0m \x1b[31m{msg}\x1b[0m\n")
+    print(f"\n  {C_RED}{C_BOLD}✖{C_RESET} {C_RED}{msg}{C_RESET}\n")
 
 def encrypt_file(file_path):
     """Transforms a plaintext python file into a secure Velora Encrypted Stub."""
