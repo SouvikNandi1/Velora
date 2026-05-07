@@ -1,4 +1,4 @@
-__version__ = "2.1.2"
+__version__ = "2.1.3"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
