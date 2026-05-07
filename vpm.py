@@ -1,4 +1,4 @@
-__version__ = "2.2.0"
+__version__ = "2.2.2"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -1043,7 +1043,8 @@ def main():
         if args[1].lower() == 'all':
             install_all_official()
         else:
-            install_package(args[1])
+            for pkg in args[1:]:
+                install_package(pkg)
     elif cmd == 'update' and len(args) > 1:
         target_user = os.path.join(USER_CORE_DIR, f"{args[1]}.py")
         target_bundled = os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")
