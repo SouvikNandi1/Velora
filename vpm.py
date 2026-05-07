@@ -1,4 +1,4 @@
-__version__ = "2.7.0"
+__version__ = "2.8.0"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -288,7 +288,10 @@ def list_packages():
                 is_official = "✅" in desc
                 
                 # Determine category
-                cat = OFFICIAL_MAPPING.get(pkg)
+                cat = info.get('category') # Try to get from cloud data first
+                if not cat:
+                    cat = OFFICIAL_MAPPING.get(pkg)
+                
                 if not cat:
                     if "game" in desc.lower() or "play" in desc.lower(): cat = "🎮 Games"
                     elif "tool" in desc.lower() or "utility" in desc.lower(): cat = "🛠️ Tools"
@@ -853,6 +856,8 @@ def publish_package(pkg_name, file_path, description="", entry_file=""):
             if a_match: payload_dict["author"] = a_match.group(1)
             w_match = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
             if w_match: payload_dict["website"] = w_match.group(1)
+            c_match = re.search(r'^__category__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+            if c_match: payload_dict["category"] = c_match.group(1)
         else:
             # Single-file publishing
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -885,6 +890,8 @@ def publish_package(pkg_name, file_path, description="", entry_file=""):
             if a_match: payload_dict["author"] = a_match.group(1)
             w_match = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
             if w_match: payload_dict["website"] = w_match.group(1)
+            c_match = re.search(r'^__category__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+            if c_match: payload_dict["category"] = c_match.group(1)
             
         payload = json.dumps(payload_dict).encode('utf-8')
         url = f"{get_base_url()}/{urllib.parse.quote(pkg_name)}.json"
