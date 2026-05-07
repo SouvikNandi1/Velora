@@ -112,7 +112,9 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
                     enc = base64.b64decode(m.group(1))
                     dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 39] for i, b in enumerate(enc)).decode('utf-8')
                     lib_dir = os.path.dirname(file_path)
+                    root_dir = os.path.dirname(os.path.abspath(__file__))
                     if lib_dir not in sys.path: sys.path.insert(0, lib_dir)
+                    if root_dir not in sys.path: sys.path.insert(0, root_dir)
                     exec(dec, {"__name__": run_name, "__file__": file_path, "sys": sys, "os": os})
                 else: print(f"\x1b[31;1mError:\x1b[0m Corrupted encrypted payload in '{file_path}'.")
             else:
