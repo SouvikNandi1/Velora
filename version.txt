@@ -830,3 +830,11 @@ v2.00.3
 - Fixed missing tab close buttons by implementing a dynamically generated SVG close icon in the application stylesheet.
 - Improved tab bar responsiveness and close button positioning across different themes.
 - Synchronized ecosystem-wide versioning to v2.00.3 for Terminal, VPM, and Bootstrap.
+
+v2.1.0
+- Overhauled Velora Package Manager (VPM) with a new categorized layout (Tools, System, Games, Fun).
+- Major upgrade for core programs to v2.0.0, adding powerful features to fetch, weather, calc, todo, and more.
+- Introduced the first official terminal game: `snake` (🎮 Games).
+- Integrated `__category__` metadata across all core programs for improved organization.
+- Enhanced VPM UI with section headers, emojis, and better data visualization.
+- Synchronized ecosystem-wide versioning to v2.1.0 for Terminal, VPM, and Bootstrap.

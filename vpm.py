@@ -1,4 +1,4 @@
-__version__ = "2.00.3"
+__version__ = "2.1.0"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -190,40 +190,65 @@ def list_packages():
                 terminal_utils.print_status("No packages found in the cloud.", type="info")
                 return
             
-            official = []
-            community = []
+            categories = {
+                "🛠️ Tools": [],
+                "🖥️ System": [],
+                "🎮 Games": [],
+                "✨ Fun": [],
+                "📦 Other": []
+            }
+
+            # Mapping for official packages to categories
+            OFFICIAL_MAPPING = {
+                "calc": "🛠️ Tools", "unitconv": "🛠️ Tools", "baseconv": "🛠️ Tools", "hash": "🛠️ Tools", 
+                "textstat": "🛠️ Tools", "todo": "🛠️ Tools", "notes": "🛠️ Tools", "passgen": "🛠️ Tools", 
+                "uuidgen": "🛠️ Tools", "url": "🛠️ Tools", "b32": "🛠️ Tools", "b64": "🛠️ Tools", 
+                "jsonfmt": "🛠️ Tools", "hashfile": "🛠️ Tools", "currency": "🛠️ Tools", "translator": "🛠️ Tools",
+                "timer": "🛠️ Tools", "stopwatch": "🛠️ Tools", "cal": "🛠️ Tools",
+                "fetch": "🖥️ System", "ipinfo": "🖥️ System", "sysinfo": "🖥️ System", "weather": "🖥️ System", 
+                "worldclock": "🖥️ System", "install-tor": "🖥️ System",
+                "quote": "✨ Fun", "matrix": "✨ Fun", "roll": "✨ Fun", "chat": "✨ Fun"
+            }
+
             for pkg, info in data.items():
                 if not isinstance(info, dict): continue
-                if "✅" in info.get('description', ''):
-                    official.append((pkg, info))
-                else:
-                    community.append((pkg, info))
-
-            official.sort()
-            community.sort()
+                desc = info.get('description', '')
+                is_official = "✅" in desc
+                
+                # Determine category
+                cat = OFFICIAL_MAPPING.get(pkg)
+                if not cat:
+                    if "game" in desc.lower() or "play" in desc.lower(): cat = "🎮 Games"
+                    elif "tool" in desc.lower() or "utility" in desc.lower(): cat = "🛠️ Tools"
+                    elif is_official: cat = "🛠️ Tools" # Fallback for official
+                    else: cat = "📦 Other"
+                
+                categories[cat].append((pkg, info))
 
             terminal_utils.print_header("Velora Cloud Registry", color=terminal_utils.PURPLE)
             
-            table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
-                                         colors=[terminal_utils.CYAN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
+            for cat_name, items in categories.items():
+                if not items: continue
+                
+                terminal_utils.print_section(cat_name, color=terminal_utils.CYAN)
+                table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
+                                             colors=[terminal_utils.CYAN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
 
-            def add_section_to_table(title, items, icon=""):
+                items.sort()
                 for pkg, info in items:
                     version = info.get('version', 'v1.0.0')
                     author = info.get('author', 'Unknown')[:12]
                     desc = info.get('description', '').replace('✅', '').strip()
                     desc = (desc[:29] + '..') if len(desc) > 29 else desc
                     is_installed = "*" if pkg in local_pkgs else " "
+                    icon = "✅ " if "✅" in info.get('description', '') else ""
                     
                     table.add_row([f"{icon}{is_installed}{pkg}", version, author, desc])
+                
+                table.print()
+                print()
 
-            if official:
-                add_section_to_table("Official", official, icon="✅")
-            
-            if community:
-                add_section_to_table("Community", community)
-
-            table.print()
+            print(f"  {terminal_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{terminal_utils.RESET}")
             print(f"  {terminal_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{terminal_utils.RESET}")
     except Exception as e:
         terminal_utils.print_status(f"Error fetching packages: {e}", type="error")
@@ -253,6 +278,7 @@ def get_local_packages_info():
             a_m = re.search(r'^__author__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
             w_m = re.search(r'^__website__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
             d_m = re.search(r'^__description__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
+            c_m = re.search(r'^__category__\s*=\s*["\']([^"\']+)["\']', code, re.MULTILINE)
             
             pkgs_info.append({
                 "name": pkg,
@@ -260,6 +286,7 @@ def get_local_packages_info():
                 "author": a_m.group(1) if a_m else "Unknown",
                 "website": w_m.group(1) if w_m else "",
                 "description": d_m.group(1) if d_m else "Local Velora program",
+                "category": c_m.group(1) if c_m else "Tools",
                 "path": file_path,
                 "type": "user" if USER_CORE_DIR in file_path else "bundled"
             })
@@ -271,18 +298,36 @@ def list_local_packages():
     terminal_utils.print_header("Local Installed Packages", color=terminal_utils.CYAN)
     
     pkgs = get_local_packages_info()
-    table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
-                                 colors=[terminal_utils.GREEN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
     
+    # Categorize local packages
+    categories = {}
     for pkg in pkgs:
-        table.add_row([pkg['name'], pkg['version'], pkg['author'], pkg['description']])
+        cat = pkg.get('category', '🛠️ Tools')
+        if cat not in categories: categories[cat] = []
+        categories[cat].append(pkg)
     
-    # Add terminal app info
-    term_ver = os.environ.get("VELORA_VERSION", "1.0.0")
-    table.add_row(["Velora Terminal", term_ver, "Souvik", "Velora Terminal Core Application"])
+    # Add Terminal app to System category
+    if "🖥️ System" not in categories: categories["🖥️ System"] = []
+    term_ver = os.environ.get("VELORA_VERSION", "2.0.x")
+    categories["🖥️ System"].append({
+        "name": "Velora Terminal",
+        "version": term_ver,
+        "author": "Souvik",
+        "description": "Velora Terminal Core Application"
+    })
+
+    for cat_name, items in sorted(categories.items()):
+        terminal_utils.print_section(cat_name, color=terminal_utils.PURPLE)
+        table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
+                                     colors=[terminal_utils.GREEN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
+        
+        for pkg in sorted(items, key=lambda x: x['name']):
+            table.add_row([pkg['name'], pkg['version'], pkg['author'], pkg['description']])
+        
+        table.print()
+        print()
     
-    table.print()
-    terminal_utils.print_status(f"Found {len(pkgs) + 1} installed packages.", type="info")
+    terminal_utils.print_status(f"Found {len(pkgs) + 1} installed components.", type="info")
 
 def install_package(pkg_name):
     url = f"{get_base_url()}/{urllib.parse.quote(pkg_name)}.json?_t={int(time.time())}"
