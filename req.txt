@@ -1,9 +1,12 @@
 PyQt6
 pyinstaller
 Pysocks
-stem
-cryptography
-pyopenssl
-service_identity
-twisted
-zope.interface
+stem # For Tor integration (if any)
+cryptography # For secure communications
+pyopenssl # For SSL/TLS support
+service_identity # For SSL certificate validation
+twisted # For network programming (if any)
+zope.interface # Dependency for Twisted
+PyQt6-WebEngineWidgets # For embedding web content
+PyQt6-Charts # For data visualization and charting
+PyQt6-Multimedia # For multimedia playback capabilities
