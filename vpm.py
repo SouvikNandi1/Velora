@@ -19,27 +19,37 @@ import platform
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import velora_utils
 
-# Robust fallback for UI utilities to prevent "attribute not found" errors in frozen/dist environments
-def v_print_header(title, color=getattr(velora_utils, 'PURPLE', "\x1b[38;2;189;147;249m")):
+# Safe local constants to prevent attribute errors in frozen/dist environments
+V_PURPLE = getattr(velora_utils, 'PURPLE', "\x1b[38;2;189;147;249m")
+V_CYAN   = getattr(velora_utils, 'CYAN',   "\x1b[38;2;139;233;253m")
+V_GREEN  = getattr(velora_utils, 'GREEN',  "\x1b[38;2;80;250;123m")
+V_PINK   = getattr(velora_utils, 'PINK',   "\x1b[38;2;255;121;198m")
+V_ORANGE = getattr(velora_utils, 'ORANGE', "\x1b[38;2;255;184;108m")
+V_RED    = getattr(velora_utils, 'RED',    "\x1b[38;2;255;85;85m")
+V_YELLOW = getattr(velora_utils, 'YELLOW', "\x1b[38;2;241;250;140m")
+V_GREY   = getattr(velora_utils, 'GREY',   "\x1b[38;2;98;114;164m")
+V_RESET  = getattr(velora_utils, 'RESET',  "\x1b[0m")
+V_BOLD   = getattr(velora_utils, 'BOLD',   "\x1b[1m")
+
+# Robust fallback for UI utilities
+def v_print_header(title, color=V_PURPLE):
     if hasattr(velora_utils, 'print_header'):
         return velora_utils.print_header(title, color)
-    # Fallback implementation if module is partially loaded or outdated
     width = 80
-    print(f"\n{color}\x1b[1m┏" + "━" * (width - 2) + "┓")
+    print(f"\n{color}{V_BOLD}┏" + "━" * (width - 2) + "┓")
     print(f"┃ {title.center(width - 4)} ┃")
-    print(f"┗" + "━" * (width - 2) + f"┛\x1b[0m")
+    print(f"┗" + "━" * (width - 2) + f"┛{V_RESET}")
 
 def v_print_status(message, type="info"):
     if hasattr(velora_utils, 'print_status'):
         return velora_utils.print_status(message, type)
-    # Fallback
-    icons = {"success": "✅", "error": "❌", "warning": "⚠️", "info": "ℹ️"}
-    print(f"  {icons.get(type, 'ℹ️')} {message}")
+    icons = {"success": f"{V_GREEN}✅", "error": f"{V_RED}❌", "warning": f"{V_ORANGE}⚠️", "info": f"{V_CYAN}ℹ️"}
+    print(f"  {icons.get(type, 'ℹ️')} {message}{V_RESET}")
 
-def v_print_section(title, color=getattr(velora_utils, 'CYAN', "\x1b[38;2;139;233;253m")):
+def v_print_section(title, color=V_CYAN):
     if hasattr(velora_utils, 'print_section'):
         return velora_utils.print_section(title, color)
-    print(f"\n{color}\x1b[1m─── {title} " + "─" * (75 - len(title)) + "\x1b[0m")
+    print(f"\n{color}{V_BOLD}─── {title} " + "─" * (75 - len(title)) + f"{V_RESET}")
 
 
 def clean_version(v):
@@ -255,21 +265,21 @@ def list_packages():
             community_count = total_pkgs - official_count
             installed_count = sum(1 for pkg in data if pkg in local_pkgs)
 
-            v_print_header("Velora Cloud Registry", color=velora_utils.PURPLE)
+            v_print_header("Velora Cloud Registry", color=V_PURPLE)
             
             # Summary Dashboard
-            print(f"  {velora_utils.CYAN}Total:{velora_utils.RESET} {total_pkgs:<5} "
-                  f"{velora_utils.GREEN}Official:{velora_utils.RESET} {official_count:<5} "
-                  f"{velora_utils.PINK}Community:{velora_utils.RESET} {community_count:<5} "
-                  f"{velora_utils.YELLOW}Installed:{velora_utils.RESET} {installed_count}")
-            print(f"  {velora_utils.GREY}" + "─" * 60 + f"{velora_utils.RESET}\n")
+            print(f"  {V_CYAN}Total:{V_RESET} {total_pkgs:<5} "
+                  f"{V_GREEN}Official:{V_RESET} {official_count:<5} "
+                  f"{V_PINK}Community:{V_RESET} {community_count:<5} "
+                  f"{V_YELLOW}Installed:{V_RESET} {installed_count}")
+            print(f"  {V_GREY}" + "─" * 60 + f"{V_RESET}\n")
 
             for cat_name, items in categories.items():
                 if not items: continue
                 
-                v_print_section(cat_name, color=velora_utils.CYAN)
+                v_print_section(cat_name, color=V_CYAN)
                 table = velora_utils.Table(["Package", "Version", "Author", "Description"], 
-                                             colors=[velora_utils.CYAN, velora_utils.YELLOW, velora_utils.PINK, velora_utils.RESET])
+                                             colors=[V_CYAN, V_YELLOW, V_PINK, V_RESET])
 
                 items.sort()
                 for pkg, info in items:
@@ -285,8 +295,8 @@ def list_packages():
                 table.print()
                 print()
 
-            print(f"  {velora_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{velora_utils.RESET}")
-            print(f"  {velora_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{velora_utils.RESET}")
+            print(f"  {V_GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{V_RESET}")
+            print(f"  {V_GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{V_RESET}")
     except Exception as e:
         v_print_status(f"Error fetching packages: {e}", type="error")
 
@@ -332,7 +342,7 @@ def get_local_packages_info():
     return pkgs_info
 
 def list_local_packages():
-    v_print_header("Local Installed Packages", color=velora_utils.CYAN)
+    v_print_header("Local Installed Packages", color=V_CYAN)
     
     pkgs = get_local_packages_info()
     
@@ -354,9 +364,9 @@ def list_local_packages():
     })
 
     for cat_name, items in sorted(categories.items()):
-        v_print_section(cat_name, color=velora_utils.PURPLE)
+        v_print_section(cat_name, color=V_PURPLE)
         table = velora_utils.Table(["Package", "Version", "Author", "Description"], 
-                                     colors=[velora_utils.GREEN, velora_utils.YELLOW, velora_utils.PINK, velora_utils.RESET])
+                                     colors=[V_GREEN, V_YELLOW, V_PINK, V_RESET])
         
         for pkg in sorted(items, key=lambda x: x['name']):
             table.add_row([pkg['name'], pkg['version'], pkg['author'], pkg['description']])
@@ -531,14 +541,14 @@ def locate_package(pkg_name):
     if os.path.exists(target_path_user):
         path_to_reveal = target_path_user
         v_print_status(f"Package '{pkg_name}' is located at:", type="info")
-        print(f"  {velora_utils.GREEN}{target_path_user}{velora_utils.RESET} (User Update)")
+        print(f"  {V_GREEN}{target_path_user}{V_RESET} (User Update)")
         lib_target = os.path.join(USER_CORE_DIR, f"{pkg_name}_lib")
         if os.path.exists(lib_target):
-            print(f"  {velora_utils.GREEN}{lib_target}{velora_utils.RESET} (Library Directory)")
+            print(f"  {V_GREEN}{lib_target}{V_RESET} (Library Directory)")
     elif os.path.exists(target_path_bundled):
         path_to_reveal = target_path_bundled
         v_print_status(f"Package '{pkg_name}' is located at:", type="info")
-        print(f"  {velora_utils.GREEN}{target_path_bundled}{velora_utils.RESET} (Bundled natively inside Velora)")
+        print(f"  {V_GREEN}{target_path_bundled}{V_RESET} (Bundled natively inside Velora)")
     else:
         v_print_status(f"Package '{pkg_name}' is not installed locally.", type="error")
         return
@@ -604,7 +614,7 @@ def upgrade_terminal():
 
     if IS_FROZEN:
         v_print_status("Cannot perform over-the-air terminal upgrades on compiled native binaries.", type="error")
-        print(f"  {velora_utils.GREY}Please download the latest executable installer or rebuild using build.py.{velora_utils.RESET}")
+        print(f"  {V_GREY}Please download the latest executable installer or rebuild using build.py.{V_RESET}")
         return
     project_id, _ = get_remote_credentials()
     url = f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}"
@@ -636,7 +646,7 @@ def upgrade_terminal():
             except Exception as e:
                 print(f"\x1b[31;1mBuild error:\x1b[0m {e}")
                 
-        print(f"  {velora_utils.YELLOW}Please completely close and restart Velora to apply the update.{velora_utils.RESET}")
+        print(f"  {V_YELLOW}Please completely close and restart Velora to apply the update.{V_RESET}")
     except Exception as e:
         v_print_status(f"Upgrade failed: {e}", type="error")
 
@@ -716,35 +726,35 @@ def check_updates():
                                 if is_newer(cloud_ver, local_ver): pkg_updates.append((pkg, local_ver, cloud_ver))
                             except Exception: pass
                             
-        v_print_header("Velora Update Center", color=velora_utils.PURPLE)
+        v_print_header("Velora Update Center", color=V_PURPLE)
         
         # Terminal Status
-        v_print_section("Terminal Application", color=velora_utils.CYAN)
+        v_print_section("Terminal Application", color=V_CYAN)
         if app_update:
-            v_print_status(f"Outdated: {velora_utils.RED}{app_current}{velora_utils.RESET} -> {velora_utils.GREEN}{app_update}{velora_utils.RESET}", type="warning")
-            print(f"  {velora_utils.YELLOW}🔔 Run 'vpm upgrade' to install the new version.{velora_utils.RESET}")
+            v_print_status(f"Outdated: {V_RED}{app_current}{V_RESET} -> {V_GREEN}{app_update}{V_RESET}", type="warning")
+            print(f"  {V_YELLOW}🔔 Run 'vpm upgrade' to install the new version.{V_RESET}")
         else:
             v_print_status(f"Up to date (v{app_current})", type="success")
 
         # Bootstrap Status
-        v_print_section("Bootstrap Installer", color=velora_utils.CYAN)
+        v_print_section("Bootstrap Installer", color=V_CYAN)
         if bootstrap_update:
-            v_print_status(f"Outdated: {velora_utils.RED}{bootstrap_current}{velora_utils.RESET} -> {velora_utils.GREEN}{bootstrap_update}{velora_utils.RESET}", type="warning")
-            print(f"  {velora_utils.YELLOW}🔔 Re-run the bootstrap installer to update:{velora_utils.RESET}")
+            v_print_status(f"Outdated: {V_RED}{bootstrap_current}{V_RESET} -> {V_GREEN}{bootstrap_update}{V_RESET}", type="warning")
+            print(f"  {V_YELLOW}🔔 Re-run the bootstrap installer to update:{V_RESET}")
             if platform.system() == "Windows":
                 cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
             else:
                 cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
-            print(f"  {velora_utils.CYAN}{velora_utils.BOLD}{cmd}{velora_utils.RESET}")
+            print(f"  {V_CYAN}{V_BOLD}{cmd}{V_RESET}")
         else:
             v_print_status(f"Up to date (v{bootstrap_current})", type="success")
 
         # Package Status
         if pkg_updates:
-            print(f"\n  {velora_utils.BOLD}{velora_utils.CYAN}Upgradable Packages:{velora_utils.RESET}")
+            print(f"\n  {V_BOLD}{V_CYAN}Upgradable Packages:{V_RESET}")
             for p, l_ver, c_ver in pkg_updates: 
-                print(f"  {velora_utils.PINK}• {p:<15}{velora_utils.RESET} {velora_utils.RED}{l_ver}{velora_utils.RESET} -> {velora_utils.GREEN}{c_ver}{velora_utils.RESET}")
-            print(f"\n  {velora_utils.YELLOW}🔔 Run 'vpm update-all' to update {len(pkg_updates)} package(s).{velora_utils.RESET}")
+                print(f"  {V_PINK}• {p:<15}{V_RESET} {V_RED}{l_ver}{V_RESET} -> {V_GREEN}{c_ver}{V_RESET}")
+            print(f"\n  {V_YELLOW}🔔 Run 'vpm update-all' to update {len(pkg_updates)} package(s).{V_RESET}")
         else:
             v_print_status("All local packages are up to date!", type="success")
             
@@ -942,10 +952,10 @@ def main():
     args = sys.argv[1:]
     args = sys.argv[1:]
     if not args:
-        v_print_header("Velora Package Manager (VPM)", color=velora_utils.PURPLE)
-        print(f"  {velora_utils.BOLD}{velora_utils.YELLOW}Usage:{velora_utils.RESET}")
+        v_print_header("Velora Package Manager (VPM)", color=V_PURPLE)
+        print(f"  {V_BOLD}{V_YELLOW}Usage:{V_RESET}")
         
-        help_table = velora_utils.Table(["Command", "Description"], colors=[velora_utils.CYAN, velora_utils.GREY])
+        help_table = velora_utils.Table(["Command", "Description"], colors=[V_CYAN, V_GREY])
         help_table.add_row(["list", "List all packages on SNCloud"])
         help_table.add_row(["local", "List local installed packages and versions"])
         help_table.add_row(["check", "Check SNCloud for available updates"])
@@ -1002,9 +1012,9 @@ def main():
                 remove_wrapper(args[1])
         else:
             if os.path.exists(os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")):
-                velora_utils.print_status(f"Package '{args[1]}' is natively bundled with the compiled app and cannot be removed.", type="warning")
+                v_print_status(f"Package '{args[1]}' is natively bundled with the compiled app and cannot be removed.", type="warning")
             else:
-                velora_utils.print_status(f"Package '{args[1]}' is not installed locally.", type="error")
+                v_print_status(f"Package '{args[1]}' is not installed locally.", type="error")
     elif cmd == 'build': build_executable()
     elif cmd == 'publish' and len(args) > 2:
         desc = args[3] if len(args) > 3 else "A custom Velora core package"
