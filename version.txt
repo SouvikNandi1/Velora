@@ -839,11 +839,13 @@ v2.1.0
 - Enhanced VPM UI with section headers, emojis, and better data visualization.
 - Synchronized ecosystem-wide versioning to v2.1.0 for Terminal, VPM, and Bootstrap.
 
+v2.7.0
+- VPM UI: Implemented functional category filtering (Network, System, Data, etc.) in the Package Manager.
+- CORE: Sanitized all core program filenames (removed hyphens for better shell consistency).
+- METADATA: Added __description__ fields to all 50+ new core utilities.
+- SYNC: Full ecosystem-wide synchronization to v2.7.0.
+
 v2.6.0
-- THE GREAT EXPANSION: Integrated 50+ new high-fidelity core programs.
-- CORE: Added comprehensive toolsets for Networking, System Diagnostics, and Data Science.
-- DOCUMENTATION: Updated help.html with the new 'Extended Core Suite' gallery.
-- SYNC: Full ecosystem-wide synchronization to v2.6.0.
 
 v2.2.0
 - MAJOR: Expanded the 'Tools' ecosystem with new core programs.

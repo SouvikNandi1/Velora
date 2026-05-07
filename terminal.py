@@ -1,4 +1,4 @@
-__version__ = "2.6.0"
+__version__ = "2.7.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -786,6 +786,7 @@ class VPMPackageCard(QFrame):
         
         self.local_ver = next((p['version'] for p in local_info if p['name'] == name), None)
         self.cloud_ver = info.get('version', '1.0.0')
+        self.category = info.get('category', '🛠️ Tools')
         self.is_official = "✅" in info.get('description', '')
         self.update_available = self.local_ver and is_newer(self.cloud_ver, self.local_ver)
         
@@ -962,15 +963,28 @@ class VPMSidebar(QFrame):
             ("All Packages", "all", "📦"),
             ("Official", "official", "✅"),
             ("Installed", "installed", "💾"),
-            ("Updates", "updates", "🚀")
+            ("Updates", "updates", "🚀"),
+            ("---", "sep1", ""),
+            ("Network", "🛠️ Network", "🛰️"),
+            ("System", "🖥️ System", "📊"),
+            ("Data/Dev", "🔢 Data", "🛠️"),
+            ("Media", "🖼️ Media", "🎬"),
+            ("Utilities", "🧰 Utils", "⚙️")
         ]
 
         for label, key, icon in categories:
+            if label == "---":
+                line = QFrame()
+                line.setFixedHeight(1)
+                line.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(self.theme['border'])}, 0.2); margin: 5px 10px;")
+                self.layout.addWidget(line)
+                continue
+
             btn = QPushButton(f"{icon}  {label}")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda checked, k=key: self.on_clicked(k))
-            btn.setFixedHeight(48)
+            btn.setFixedHeight(40)
             self.layout.addWidget(btn)
             self.buttons[key] = btn
 
@@ -1169,7 +1183,13 @@ class VPMTab(QWidget):
             elif cat == "updates": match_cat = card.update_available
             
             if match_text and match_cat:
-                filtered.append(card)
+                # Handle Functional Categories
+                if cat not in ["all", "official", "installed", "updates"]:
+                    if card.category != cat:
+                        match_cat = False
+                
+                if match_cat:
+                    filtered.append(card)
         
         row, col = 0, 0
         # Dynamic columns based on available width
@@ -1544,7 +1564,7 @@ class TerminalSession(QWidget):
         env.insert("COLORTERM", "truecolor")
         env.insert("VELORA_PYTHON", sys.executable)
         env.insert("VELORA_CORE", os.path.expanduser("~/.velora/core"))
-        env.insert("VELORA_VERSION", "2.6.0")
+        env.insert("VELORA_VERSION", "2.7.0")
         env.insert("VELORA_TERMINAL_PATH", os.path.abspath(sys.argv[0]))
         
         # Inject native wrappers into PATH
