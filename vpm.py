@@ -17,7 +17,7 @@ import subprocess
 import platform
 # Force local imports to prevent collision with system packages
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import velora_utils as terminal_utils
+import velora_utils
 
 
 def clean_version(v):
@@ -164,15 +164,15 @@ def download_with_progress(req):
                     break
                 chunks.append(chunk)
                 downloaded += len(chunk)
-                terminal_utils.progress_bar(downloaded, total_size, prefix="Downloading:", suffix=f"({downloaded/1024:.1f} KB)")
+                velora_utils.progress_bar(downloaded, total_size, prefix="Downloading:", suffix=f"({downloaded/1024:.1f} KB)")
             data = b"".join(chunks)
         else:
             data = response.read()
             # Fake progress for unknown size
             for i in range(1, 101, 5):
-                terminal_utils.progress_bar(i, 100, prefix="Downloading:", suffix="...")
+                velora_utils.progress_bar(i, 100, prefix="Downloading:", suffix="...")
                 time.sleep(0.02)
-            terminal_utils.progress_bar(100, 100, prefix="Downloading:", suffix="Done")
+            velora_utils.progress_bar(100, 100, prefix="Downloading:", suffix="Done")
         return json.loads(data.decode('utf-8'))
 
 def list_packages():
@@ -189,7 +189,7 @@ def list_packages():
             except: pass
 
             if not data or data == 'null':
-                terminal_utils.print_status("No packages found in the cloud.", type="info")
+                velora_utils.print_status("No packages found in the cloud.", type="info")
                 return
             
             categories = {
@@ -233,21 +233,21 @@ def list_packages():
             community_count = total_pkgs - official_count
             installed_count = sum(1 for pkg in data if pkg in local_pkgs)
 
-            terminal_utils.print_header("Velora Cloud Registry", color=terminal_utils.PURPLE)
+            velora_utils.print_header("Velora Cloud Registry", color=velora_utils.PURPLE)
             
             # Summary Dashboard
-            print(f"  {terminal_utils.CYAN}Total:{terminal_utils.RESET} {total_pkgs:<5} "
-                  f"{terminal_utils.GREEN}Official:{terminal_utils.RESET} {official_count:<5} "
-                  f"{terminal_utils.PINK}Community:{terminal_utils.RESET} {community_count:<5} "
-                  f"{terminal_utils.YELLOW}Installed:{terminal_utils.RESET} {installed_count}")
-            print(f"  {terminal_utils.GREY}" + "─" * 60 + f"{terminal_utils.RESET}\n")
+            print(f"  {velora_utils.CYAN}Total:{velora_utils.RESET} {total_pkgs:<5} "
+                  f"{velora_utils.GREEN}Official:{velora_utils.RESET} {official_count:<5} "
+                  f"{velora_utils.PINK}Community:{velora_utils.RESET} {community_count:<5} "
+                  f"{velora_utils.YELLOW}Installed:{velora_utils.RESET} {installed_count}")
+            print(f"  {velora_utils.GREY}" + "─" * 60 + f"{velora_utils.RESET}\n")
 
             for cat_name, items in categories.items():
                 if not items: continue
                 
-                terminal_utils.print_section(cat_name, color=terminal_utils.CYAN)
-                table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
-                                             colors=[terminal_utils.CYAN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
+                velora_utils.print_section(cat_name, color=velora_utils.CYAN)
+                table = velora_utils.Table(["Package", "Version", "Author", "Description"], 
+                                             colors=[velora_utils.CYAN, velora_utils.YELLOW, velora_utils.PINK, velora_utils.RESET])
 
                 items.sort()
                 for pkg, info in items:
@@ -263,10 +263,10 @@ def list_packages():
                 table.print()
                 print()
 
-            print(f"  {terminal_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{terminal_utils.RESET}")
-            print(f"  {terminal_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{terminal_utils.RESET}")
+            print(f"  {velora_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{velora_utils.RESET}")
+            print(f"  {velora_utils.GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{velora_utils.RESET}")
     except Exception as e:
-        terminal_utils.print_status(f"Error fetching packages: {e}", type="error")
+        velora_utils.print_status(f"Error fetching packages: {e}", type="error")
 
 def get_cloud_packages():
     """Returns a dictionary of packages from SNCloud for UI consumption."""
@@ -310,7 +310,7 @@ def get_local_packages_info():
     return pkgs_info
 
 def list_local_packages():
-    terminal_utils.print_header("Local Installed Packages", color=terminal_utils.CYAN)
+    velora_utils.print_header("Local Installed Packages", color=velora_utils.CYAN)
     
     pkgs = get_local_packages_info()
     
@@ -332,9 +332,9 @@ def list_local_packages():
     })
 
     for cat_name, items in sorted(categories.items()):
-        terminal_utils.print_section(cat_name, color=terminal_utils.PURPLE)
-        table = terminal_utils.Table(["Package", "Version", "Author", "Description"], 
-                                     colors=[terminal_utils.GREEN, terminal_utils.YELLOW, terminal_utils.PINK, terminal_utils.RESET])
+        velora_utils.print_section(cat_name, color=velora_utils.PURPLE)
+        table = velora_utils.Table(["Package", "Version", "Author", "Description"], 
+                                     colors=[velora_utils.GREEN, velora_utils.YELLOW, velora_utils.PINK, velora_utils.RESET])
         
         for pkg in sorted(items, key=lambda x: x['name']):
             table.add_row([pkg['name'], pkg['version'], pkg['author'], pkg['description']])
@@ -342,7 +342,7 @@ def list_local_packages():
         table.print()
         print()
     
-    terminal_utils.print_status(f"Found {len(pkgs) + 1} installed components.", type="info")
+    velora_utils.print_status(f"Found {len(pkgs) + 1} installed components.", type="info")
 
 def install_package(pkg_name):
     url = f"{get_base_url()}/{urllib.parse.quote(pkg_name)}.json?_t={int(time.time())}"
@@ -350,7 +350,7 @@ def install_package(pkg_name):
         req = get_request(url)
         data = download_with_progress(req)
         if not data or data == 'null':
-            terminal_utils.print_status(f"Package '{pkg_name}' not found on SNCloud.", type="error")
+            velora_utils.print_status(f"Package '{pkg_name}' not found on SNCloud.", type="error")
             return
         
         target_path = os.path.join(USER_CORE_DIR, f"{pkg_name}.py")
@@ -382,7 +382,7 @@ def install_package(pkg_name):
                 if file_path.endswith('.py'):
                     try:
                         code_str = raw_bytes.decode('utf-8')
-                        key = b"velora_secure_123"
+                        key = b"VeloraSuperSecureKeyForObfuscation2026!"
                         code_bytes = code_str.encode('utf-8')
                         enc = bytes(b ^ key[i % len(key)] for i, b in enumerate(code_bytes))
                         b64_code = base64.b64encode(enc).decode('utf-8')
@@ -425,7 +425,7 @@ def install_package(pkg_name):
             # Legacy single-file installation
             code = data.get('code')
             if not code:
-                terminal_utils.print_status("Invalid package payload from server.", type="error")
+                velora_utils.print_status("Invalid package payload from server.", type="error")
                 return
                 
             version = "1.0.0"
@@ -466,41 +466,41 @@ def install_package(pkg_name):
                 f.write(stub_code)
                 
         create_wrapper(pkg_name)
-        terminal_utils.print_status(f"Successfully installed '{pkg_name}'!", type="success")
-        terminal_utils.print_labeled("Location", target_path)
+        velora_utils.print_status(f"Successfully installed '{pkg_name}'!", type="success")
+        velora_utils.print_labeled("Location", target_path)
     except Exception as e:
-        terminal_utils.print_status(f"Error installing package: {e}", type="error")
+        velora_utils.print_status(f"Error installing package: {e}", type="error")
 
 def install_all_official():
-    terminal_utils.print_status(f"Fetching official Velora packages from SNCloud...", type="info")
+    velora_utils.print_status(f"Fetching official Velora packages from SNCloud...", type="info")
     url = f"{get_base_url()}.json?_t={int(time.time())}"
     try:
         req = get_request(url)
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
             if not data or data == 'null':
-                terminal_utils.print_status("No packages found in the cloud.", type="info")
+                velora_utils.print_status("No packages found in the cloud.", type="info")
                 return
             
             count = 0
             for pkg, info in data.items():
                 if isinstance(info, dict) and '✅' in info.get('description', ''):
-                    terminal_utils.print_status(f"Installing official package: '{pkg}'...", type="info")
+                    velora_utils.print_status(f"Installing official package: '{pkg}'...", type="info")
                     install_package(pkg)
                     count += 1
             
-            terminal_utils.print_status(f"Finished installing {count} official packages.", type="success")
+            velora_utils.print_status(f"Finished installing {count} official packages.", type="success")
             
             build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
             if not IS_FROZEN and os.path.exists(build_script):
-                terminal_utils.print_status("Automatically building new executable version...", type="info")
+                velora_utils.print_status("Automatically building new executable version...", type="info")
                 import subprocess
                 try:
                     subprocess.call([sys.executable, build_script])
                 except Exception as e:
-                    terminal_utils.print_status(f"Build error: {e}", type="error")
+                    velora_utils.print_status(f"Build error: {e}", type="error")
     except Exception as e:
-        terminal_utils.print_status(f"Error fetching packages for install-all: {e}", type="error")
+        velora_utils.print_status(f"Error fetching packages for install-all: {e}", type="error")
 
 def locate_package(pkg_name):
     target_path_user = os.path.join(USER_CORE_DIR, f"{pkg_name}.py")
@@ -508,17 +508,17 @@ def locate_package(pkg_name):
     path_to_reveal = None
     if os.path.exists(target_path_user):
         path_to_reveal = target_path_user
-        terminal_utils.print_status(f"Package '{pkg_name}' is located at:", type="info")
-        print(f"  {terminal_utils.GREEN}{target_path_user}{terminal_utils.RESET} (User Update)")
+        velora_utils.print_status(f"Package '{pkg_name}' is located at:", type="info")
+        print(f"  {velora_utils.GREEN}{target_path_user}{velora_utils.RESET} (User Update)")
         lib_target = os.path.join(USER_CORE_DIR, f"{pkg_name}_lib")
         if os.path.exists(lib_target):
-            print(f"  {terminal_utils.GREEN}{lib_target}{terminal_utils.RESET} (Library Directory)")
+            print(f"  {velora_utils.GREEN}{lib_target}{velora_utils.RESET} (Library Directory)")
     elif os.path.exists(target_path_bundled):
         path_to_reveal = target_path_bundled
-        terminal_utils.print_status(f"Package '{pkg_name}' is located at:", type="info")
-        print(f"  {terminal_utils.GREEN}{target_path_bundled}{terminal_utils.RESET} (Bundled natively inside Velora)")
+        velora_utils.print_status(f"Package '{pkg_name}' is located at:", type="info")
+        print(f"  {velora_utils.GREEN}{target_path_bundled}{velora_utils.RESET} (Bundled natively inside Velora)")
     else:
-        terminal_utils.print_status(f"Package '{pkg_name}' is not installed locally.", type="error")
+        velora_utils.print_status(f"Package '{pkg_name}' is not installed locally.", type="error")
         return
 
     if path_to_reveal:
@@ -532,7 +532,7 @@ def locate_package(pkg_name):
         except: pass
 
 def update_all():
-    terminal_utils.print_status("Checking for updates for all installed packages...", type="info")
+    velora_utils.print_status("Checking for updates for all installed packages...", type="info")
     count = 0
     pkgs = get_local_packages_dict()
     
@@ -543,7 +543,7 @@ def update_all():
             data = json.loads(response.read().decode('utf-8'))
             if not isinstance(data, dict): data = {}
     except Exception as e:
-        terminal_utils.print_status(f"Error fetching updates from SNCloud: {e}", type="error")
+        velora_utils.print_status(f"Error fetching updates from SNCloud: {e}", type="error")
         return
 
     for pkg, file_path in pkgs.items():
@@ -561,28 +561,28 @@ def update_all():
         needs_update = is_newer(cloud_ver, local_ver)
             
         if needs_update:
-            terminal_utils.print_status(f"Updating '{pkg}' (v{local_ver} -> v{cloud_ver})...", type="info")
+            velora_utils.print_status(f"Updating '{pkg}' (v{local_ver} -> v{cloud_ver})...", type="info")
             install_package(pkg)
             count += 1
 
     if count == 0:
-        terminal_utils.print_status("All local packages are already up to date.", type="success")
+        velora_utils.print_status("All local packages are already up to date.", type="success")
     else:
-        terminal_utils.print_status(f"Finished updating {count} packages.", type="success")
+        velora_utils.print_status(f"Finished updating {count} packages.", type="success")
         build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
         if not IS_FROZEN and os.path.exists(build_script):
-            terminal_utils.print_status("Automatically building new executable version...", type="info")
+            velora_utils.print_status("Automatically building new executable version...", type="info")
             import subprocess
             try:
                 subprocess.call([sys.executable, build_script])
             except Exception as e:
-                terminal_utils.print_status(f"Build error: {e}", type="error")
+                velora_utils.print_status(f"Build error: {e}", type="error")
 
 def upgrade_terminal():
 
     if IS_FROZEN:
-        terminal_utils.print_status("Cannot perform over-the-air terminal upgrades on compiled native binaries.", type="error")
-        print(f"  {terminal_utils.GREY}Please download the latest executable installer or rebuild using build.py.{terminal_utils.RESET}")
+        velora_utils.print_status("Cannot perform over-the-air terminal upgrades on compiled native binaries.", type="error")
+        print(f"  {velora_utils.GREY}Please download the latest executable installer or rebuild using build.py.{velora_utils.RESET}")
         return
     project_id, _ = get_remote_credentials()
     url = f"https://sncloud.in/api/db/{project_id}/app/terminal.json?_t={int(time.time())}"
@@ -590,12 +590,12 @@ def upgrade_terminal():
         req = get_request(url)
         data = download_with_progress(req)
         if not data or data == 'null':
-            terminal_utils.print_status("Terminal update not found on SNCloud.", type="error")
+            velora_utils.print_status("Terminal update not found on SNCloud.", type="error")
             return
         
         code = data.get('code')
         if not code:
-            terminal_utils.print_status("Invalid terminal payload from server.", type="error")
+            velora_utils.print_status("Invalid terminal payload from server.", type="error")
             return
         
         target_path = os.environ.get("VELORA_TERMINAL_PATH")
@@ -603,7 +603,7 @@ def upgrade_terminal():
             target_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
         with open(target_path, 'w', encoding='utf-8') as f:
             f.write(code)
-        terminal_utils.print_status("Successfully upgraded the Velora Terminal App!", type="success")
+        velora_utils.print_status("Successfully upgraded the Velora Terminal App!", type="success")
         
         build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
         if not IS_FROZEN and os.path.exists(build_script):
@@ -614,12 +614,12 @@ def upgrade_terminal():
             except Exception as e:
                 print(f"\x1b[31;1mBuild error:\x1b[0m {e}")
                 
-        print(f"  {terminal_utils.YELLOW}Please completely close and restart Velora to apply the update.{terminal_utils.RESET}")
+        print(f"  {velora_utils.YELLOW}Please completely close and restart Velora to apply the update.{velora_utils.RESET}")
     except Exception as e:
-        terminal_utils.print_status(f"Upgrade failed: {e}", type="error")
+        velora_utils.print_status(f"Upgrade failed: {e}", type="error")
 
 def check_updates():
-    terminal_utils.print_status("Checking for updates on SNCloud...", type="info")
+    velora_utils.print_status("Checking for updates on SNCloud...", type="info")
     app_update = None
     app_current = "1.0.0"
     pkg_updates = []
@@ -694,40 +694,40 @@ def check_updates():
                                 if is_newer(cloud_ver, local_ver): pkg_updates.append((pkg, local_ver, cloud_ver))
                             except Exception: pass
                             
-        terminal_utils.print_header("Velora Update Center", color=terminal_utils.PURPLE)
+        velora_utils.print_header("Velora Update Center", color=velora_utils.PURPLE)
         
         # Terminal Status
-        terminal_utils.print_section("Terminal Application", color=terminal_utils.CYAN)
+        velora_utils.print_section("Terminal Application", color=velora_utils.CYAN)
         if app_update:
-            terminal_utils.print_status(f"Outdated: {terminal_utils.RED}{app_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{app_update}{terminal_utils.RESET}", type="warning")
-            print(f"  {terminal_utils.YELLOW}🔔 Run 'vpm upgrade' to install the new version.{terminal_utils.RESET}")
+            velora_utils.print_status(f"Outdated: {velora_utils.RED}{app_current}{velora_utils.RESET} -> {velora_utils.GREEN}{app_update}{velora_utils.RESET}", type="warning")
+            print(f"  {velora_utils.YELLOW}🔔 Run 'vpm upgrade' to install the new version.{velora_utils.RESET}")
         else:
-            terminal_utils.print_status(f"Up to date (v{app_current})", type="success")
+            velora_utils.print_status(f"Up to date (v{app_current})", type="success")
 
         # Bootstrap Status
-        terminal_utils.print_section("Bootstrap Installer", color=terminal_utils.CYAN)
+        velora_utils.print_section("Bootstrap Installer", color=velora_utils.CYAN)
         if bootstrap_update:
-            terminal_utils.print_status(f"Outdated: {terminal_utils.RED}{bootstrap_current}{terminal_utils.RESET} -> {terminal_utils.GREEN}{bootstrap_update}{terminal_utils.RESET}", type="warning")
-            print(f"  {terminal_utils.YELLOW}🔔 Re-run the bootstrap installer to update:{terminal_utils.RESET}")
+            velora_utils.print_status(f"Outdated: {velora_utils.RED}{bootstrap_current}{velora_utils.RESET} -> {velora_utils.GREEN}{bootstrap_update}{velora_utils.RESET}", type="warning")
+            print(f"  {velora_utils.YELLOW}🔔 Re-run the bootstrap installer to update:{velora_utils.RESET}")
             if platform.system() == "Windows":
                 cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
             else:
                 cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
-            print(f"  {terminal_utils.CYAN}{terminal_utils.BOLD}{cmd}{terminal_utils.RESET}")
+            print(f"  {velora_utils.CYAN}{velora_utils.BOLD}{cmd}{velora_utils.RESET}")
         else:
-            terminal_utils.print_status(f"Up to date (v{bootstrap_current})", type="success")
+            velora_utils.print_status(f"Up to date (v{bootstrap_current})", type="success")
 
         # Package Status
         if pkg_updates:
-            print(f"\n  {terminal_utils.BOLD}{terminal_utils.CYAN}Upgradable Packages:{terminal_utils.RESET}")
+            print(f"\n  {velora_utils.BOLD}{velora_utils.CYAN}Upgradable Packages:{velora_utils.RESET}")
             for p, l_ver, c_ver in pkg_updates: 
-                print(f"  {terminal_utils.PINK}• {p:<15}{terminal_utils.RESET} {terminal_utils.RED}{l_ver}{terminal_utils.RESET} -> {terminal_utils.GREEN}{c_ver}{terminal_utils.RESET}")
-            print(f"\n  {terminal_utils.YELLOW}🔔 Run 'vpm update-all' to update {len(pkg_updates)} package(s).{terminal_utils.RESET}")
+                print(f"  {velora_utils.PINK}• {p:<15}{velora_utils.RESET} {velora_utils.RED}{l_ver}{velora_utils.RESET} -> {velora_utils.GREEN}{c_ver}{velora_utils.RESET}")
+            print(f"\n  {velora_utils.YELLOW}🔔 Run 'vpm update-all' to update {len(pkg_updates)} package(s).{velora_utils.RESET}")
         else:
-            terminal_utils.print_status("All local packages are up to date!", type="success")
+            velora_utils.print_status("All local packages are up to date!", type="success")
             
     except Exception as e:
-        terminal_utils.print_status(f"Error checking updates: {e}", type="error")
+        velora_utils.print_status(f"Error checking updates: {e}", type="error")
 
 def publish_package(pkg_name, file_path, description="", entry_file=""):
     if not os.path.exists(file_path):
@@ -821,25 +821,25 @@ def publish_package(pkg_name, file_path, description="", entry_file=""):
         
         req = get_request(url, data=payload, method='PUT')
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
-            terminal_utils.print_status(f"Successfully published '{pkg_name}' to SNCloud!", type="success")
+            velora_utils.print_status(f"Successfully published '{pkg_name}' to SNCloud!", type="success")
     except Exception as e:
-        terminal_utils.print_status(f"Error publishing package: {e}", type="error")
+        velora_utils.print_status(f"Error publishing package: {e}", type="error")
 
 def unpublish_package(pkg_name):
     url = f"{get_base_url()}/{urllib.parse.quote(pkg_name)}.json"
     try:
         req = get_request(url, method='DELETE')
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
-            terminal_utils.print_status(f"Successfully removed '{pkg_name}' from SNCloud!", type="success")
+            velora_utils.print_status(f"Successfully removed '{pkg_name}' from SNCloud!", type="success")
     except Exception as e:
-        terminal_utils.print_status(f"Error removing package from SNCloud: {e}", type="error")
+        velora_utils.print_status(f"Error removing package from SNCloud: {e}", type="error")
 
 def publish_core_files(password):
     if password != "86531Souvik@":
-        terminal_utils.print_status("Unauthorized. Incorrect password.", type="error")
+        velora_utils.print_status("Unauthorized. Incorrect password.", type="error")
         return
         
-    terminal_utils.print_status("Publishing all core files to SNCloud...", type="info")
+    velora_utils.print_status("Publishing all core files to SNCloud...", type="info")
     
     help_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), 'help.html')
     descriptions = {}
@@ -857,15 +857,15 @@ def publish_core_files(password):
         base_desc = descriptions.get(pkg, "Official Velora Core Program")
         publish_package(pkg, file_path, f"✅ {base_desc}")
         count += 1
-    terminal_utils.print_status(f"Finished publishing {count} core files.", type="success")
+    velora_utils.print_status(f"Finished publishing {count} core files.", type="success")
 
 def publish_terminal():
     if IS_FROZEN:
-        terminal_utils.print_status("Cannot publish terminal source from a compiled native binary.", type="error")
+        velora_utils.print_status("Cannot publish terminal source from a compiled native binary.", type="error")
         return
     target_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "terminal.py")
     if not os.path.exists(target_path):
-        terminal_utils.print_status(f"Local terminal file '{target_path}' not found.", type="error")
+        velora_utils.print_status(f"Local terminal file '{target_path}' not found.", type="error")
         return
         
     try:
@@ -893,24 +893,24 @@ def publish_terminal():
         req = get_request(url, data=payload, method='PUT')
         
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
-            terminal_utils.print_status("Successfully published Velora Terminal to SNCloud!", type="success")
+            velora_utils.print_status("Successfully published Velora Terminal to SNCloud!", type="success")
     except Exception as e:
-        terminal_utils.print_status(f"Error publishing terminal: {e}", type="error")
+        velora_utils.print_status(f"Error publishing terminal: {e}", type="error")
 
 def build_executable():
     if IS_FROZEN:
-        terminal_utils.print_status("Already running a compiled binary.", type="error")
+        velora_utils.print_status("Already running a compiled binary.", type="error")
         return
     build_script = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), "build.py")
     if os.path.exists(build_script):
-        terminal_utils.print_status("Building native executable using PyInstaller...", type="info")
+        velora_utils.print_status("Building native executable using PyInstaller...", type="info")
         import subprocess
         try:
             subprocess.call([sys.executable, build_script])
         except Exception as e:
             print(f"\x1b[31;1mBuild error:\x1b[0m {e}")
     else:
-        terminal_utils.print_status("build.py not found in the project root.", type="error")
+        velora_utils.print_status("build.py not found in the project root.", type="error")
 
 def main():
     # Force UTF-8 standard output to prevent 'charmap' encoding errors with emojis on Windows
@@ -920,10 +920,10 @@ def main():
     args = sys.argv[1:]
     args = sys.argv[1:]
     if not args:
-        terminal_utils.print_header("Velora Package Manager (VPM)", color=terminal_utils.PURPLE)
-        print(f"  {terminal_utils.BOLD}{terminal_utils.YELLOW}Usage:{terminal_utils.RESET}")
+        velora_utils.print_header("Velora Package Manager (VPM)", color=velora_utils.PURPLE)
+        print(f"  {velora_utils.BOLD}{velora_utils.YELLOW}Usage:{velora_utils.RESET}")
         
-        help_table = terminal_utils.Table(["Command", "Description"], colors=[terminal_utils.CYAN, terminal_utils.GREY])
+        help_table = velora_utils.Table(["Command", "Description"], colors=[velora_utils.CYAN, velora_utils.GREY])
         help_table.add_row(["list", "List all packages on SNCloud"])
         help_table.add_row(["local", "List local installed packages and versions"])
         help_table.add_row(["check", "Check SNCloud for available updates"])
@@ -956,9 +956,9 @@ def main():
         target_user = os.path.join(USER_CORE_DIR, f"{args[1]}.py")
         target_bundled = os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")
         if not os.path.exists(target_user) and not os.path.exists(target_bundled):
-            terminal_utils.print_status(f"Package '{args[1]}' is not installed locally. Use 'vpm install {args[1]}' instead.", type="warning")
+            velora_utils.print_status(f"Package '{args[1]}' is not installed locally. Use 'vpm install {args[1]}' instead.", type="warning")
         else:
-            terminal_utils.print_status(f"Updating '{args[1]}'...", type="info")
+            velora_utils.print_status(f"Updating '{args[1]}'...", type="info")
             install_package(args[1])
     elif cmd == 'update-all': update_all()
     elif cmd == 'upgrade': upgrade_terminal()
@@ -973,16 +973,16 @@ def main():
             shutil.rmtree(lib_target)
             removed = True
         if removed:
-            terminal_utils.print_status(f"Removed user-updated package '{args[1]}'.", type="success")
+            velora_utils.print_status(f"Removed user-updated package '{args[1]}'.", type="success")
             if os.path.exists(os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")):
                 create_wrapper(args[1])
             else:
                 remove_wrapper(args[1])
         else:
             if os.path.exists(os.path.join(BUNDLED_CORE_DIR, f"{args[1]}.py")):
-                terminal_utils.print_status(f"Package '{args[1]}' is natively bundled with the compiled app and cannot be removed.", type="warning")
+                velora_utils.print_status(f"Package '{args[1]}' is natively bundled with the compiled app and cannot be removed.", type="warning")
             else:
-                terminal_utils.print_status(f"Package '{args[1]}' is not installed locally.", type="error")
+                velora_utils.print_status(f"Package '{args[1]}' is not installed locally.", type="error")
     elif cmd == 'build': build_executable()
     elif cmd == 'publish' and len(args) > 2:
         desc = args[3] if len(args) > 3 else "A custom Velora core package"
@@ -994,9 +994,9 @@ def main():
         if len(args) > 1:
             publish_core_files(args[1])
         else:
-            terminal_utils.print_status("Password required. Usage: vpm publish-main <password>", type="error")
+            velora_utils.print_status("Password required. Usage: vpm publish-main <password>", type="error")
     else:
-        terminal_utils.print_status("Invalid command or missing arguments.", type="error")
+        velora_utils.print_status("Invalid command or missing arguments.", type="error")
 
 if __name__ == "__main__":
     main()

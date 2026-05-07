@@ -39,7 +39,7 @@ import ssl
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import vpm
-import velora_utils as terminal_utils
+import velora_utils
 
 # -- NATIVE COMPILED CORE EXECUTOR --
 if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
@@ -59,13 +59,13 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
         import builtins
         
         def _velora_encrypt_data(text):
-            key = b"velora_data_123"
+            key = b"VeloraSuperSecureKeyForObfuscation2026!"
             data = text.encode('utf-8')
             enc = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
             return base64.b64encode(enc).decode('utf-8')
 
         def _velora_decrypt_data(b64_str):
-            key = b"velora_data_123"
+            key = b"VeloraSuperSecureKeyForObfuscation2026!"
             try:
                 enc = base64.b64decode(b64_str)
                 dec = bytes(b ^ key[i % len(key)] for i, b in enumerate(enc))
@@ -98,7 +98,7 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
                 m = re.search(r"__encrypted_payload__\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]", code)
                 if m:
                     enc = base64.b64decode(m.group(1))
-                    dec = bytes(b ^ b"velora_secure_123"[i % 17] for i, b in enumerate(enc)).decode('utf-8')
+                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 39] for i, b in enumerate(enc)).decode('utf-8')
                     exec(dec, module.__dict__)
                 else: raise ImportError(f"Corrupted encrypted payload in {module.__name__}")
 
@@ -110,7 +110,7 @@ if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
                 m = re.search(r"__encrypted_payload__\s*=\s*['\"]([A-Za-z0-9+/=]+)['\"]", code)
                 if m:
                     enc = base64.b64decode(m.group(1))
-                    dec = bytes(b ^ b"velora_secure_123"[i % 17] for i, b in enumerate(enc)).decode('utf-8')
+                    dec = bytes(b ^ b"VeloraSuperSecureKeyForObfuscation2026!"[i % 39] for i, b in enumerate(enc)).decode('utf-8')
                     lib_dir = os.path.dirname(file_path)
                     if lib_dir not in sys.path: sys.path.insert(0, lib_dir)
                     exec(dec, {"__name__": run_name, "__file__": file_path, "sys": sys, "os": os})
@@ -1435,9 +1435,9 @@ class StartupInfoWorker(QThread):
                 if data and isinstance(data, dict):
                     cloud_app_ver = data.get('version', '1.0.0').strip()
                     if is_newer(cloud_app_ver, __version__):
-                        msg += f"\r\n{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Bootstrap Update Available ═══{terminal_utils.RESET}\r\n"
-                        msg += f"{terminal_utils.GREEN}{bootstrap_cmd}{terminal_utils.RESET}\r\n"
-                        msg += f"{terminal_utils.GREY}Run this command to update Velora from the latest repository{terminal_utils.RESET}\r\n\r\n"
+                        msg += f"\r\n{velora_utils.BOLD}{velora_utils.CYAN}═══ Bootstrap Update Available ═══{velora_utils.RESET}\r\n"
+                        msg += f"{velora_utils.GREEN}{bootstrap_cmd}{velora_utils.RESET}\r\n"
+                        msg += f"{velora_utils.GREY}Run this command to update Velora from the latest repository{velora_utils.RESET}\r\n\r\n"
 
             # Check Packages
             req = urllib.request.Request(f"https://sncloud.in/api/db/{project_id}/packages.json?_t={int(time.time())}", 
@@ -1466,14 +1466,14 @@ class StartupInfoWorker(QThread):
                                 except: pass
                     
                     if pkg_updates:
-                        msg += f"{terminal_utils.BOLD}{terminal_utils.CYAN}═══ Package Updates Available ═══{terminal_utils.RESET}\r\n"
-                        for p in pkg_updates: msg += f"{terminal_utils.PINK}• {p}{terminal_utils.RESET}\r\n"
-                        msg += f"\r\n{terminal_utils.CYAN}Run {terminal_utils.GREEN}vpm update-all{terminal_utils.CYAN} to update all packages{terminal_utils.RESET}\r\n\r\n"
+                        msg += f"{velora_utils.BOLD}{velora_utils.CYAN}═══ Package Updates Available ═══{velora_utils.RESET}\r\n"
+                        for p in pkg_updates: msg += f"{velora_utils.PINK}• {p}{velora_utils.RESET}\r\n"
+                        msg += f"\r\n{velora_utils.CYAN}Run {velora_utils.GREEN}vpm update-all{velora_utils.CYAN} to update all packages{velora_utils.RESET}\r\n\r\n"
 
             if msg:
-                summary = f"{terminal_utils.BOLD}{terminal_utils.PURPLE}═══ Quick Update Commands ═══{terminal_utils.RESET}\r\n"
-                summary += f"{terminal_utils.GREEN}vpm upgrade{terminal_utils.RESET}         - Update the terminal application\r\n"
-                summary += f"{terminal_utils.GREEN}vpm update-all{terminal_utils.RESET}     - Update all installed packages\r\n\r\n"
+                summary = f"{velora_utils.BOLD}{velora_utils.PURPLE}═══ Quick Update Commands ═══{velora_utils.RESET}\r\n"
+                summary += f"{velora_utils.GREEN}vpm upgrade{velora_utils.RESET}         - Update the terminal application\r\n"
+                summary += f"{velora_utils.GREEN}vpm update-all{velora_utils.RESET}     - Update all installed packages\r\n\r\n"
                 msg += summary
 
             self.finished.emit(msg)
