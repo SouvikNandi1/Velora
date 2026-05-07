@@ -262,10 +262,15 @@ def main():
             # Extracts to Velora-main subfolder
             zip_ref.extractall(INSTALL_DIR)
             
-        # Move files up from the extracted subfolder
+        # Move files up from the extracted subfolder (Selective Update)
         extracted_folder = os.path.join(INSTALL_DIR, "Velora-main")
         if os.path.exists(extracted_folder):
+            log_step("Updating application files (preserving core/bin)")
             for item in os.listdir(extracted_folder):
+                # Only update the root app folder files, do not overwrite 'core' or 'bin'
+                if item in ('core', 'bin'):
+                    continue
+                    
                 s = os.path.join(extracted_folder, item)
                 d = os.path.join(INSTALL_DIR, item)
                 if os.path.exists(d):
@@ -275,9 +280,9 @@ def main():
             shutil.rmtree(extracted_folder)
             
         os.remove(zip_path)
-        log_done("Downloaded latest source from GitHub")
+        log_done("Updated application core source")
     except Exception as e:
-        log_error(f"Download error: {e}")
+        log_error(f"Update error: {e}")
         return
 
     # Install dependencies
@@ -290,15 +295,18 @@ def main():
     # Secure the codes so no one can read or change them
     secure_installation(INSTALL_DIR)
 
-    # Install core packages
-    log_step("Installing core packages")
+    # Install Essential Core Packages Only
+    log_step("Installing essential core features")
     vpm_script = os.path.join(INSTALL_DIR, "vpm.py")
     if os.path.exists(vpm_script):
         try:
-            subprocess.run([sys.executable, vpm_script, "install", "all"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            log_done("Installed core packages")
+            # Only install the most important tools as requested
+            essential_pkgs = ["fetch", "about", "calc", "weather", "notes", "netutil", "speedtest"]
+            subprocess.run([sys.executable, vpm_script, "install"] + essential_pkgs, 
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            log_done(f"Installed {len(essential_pkgs)} essential features")
         except subprocess.CalledProcessError:
-            log_error("Core packages installation failed")
+            log_error("Essential package installation failed")
             log_info("You can install them later with 'vpm install all'")
 
     # Create the shortcut
