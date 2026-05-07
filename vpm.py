@@ -1,4 +1,4 @@
-__version__ = "2.8.0"
+__version__ = "3.0.0"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -262,13 +262,7 @@ def list_packages():
                 v_print_status("No packages found in the cloud.", type="info")
                 return
             
-            categories = {
-                "🛠️ Tools": [],
-                "🖥️ System": [],
-                "🎮 Games": [],
-                "✨ Fun": [],
-                "📦 Other": []
-            }
+            categories = {}
 
             # Mapping for official packages to categories
             OFFICIAL_MAPPING = {
@@ -298,6 +292,7 @@ def list_packages():
                     elif is_official: cat = "🛠️ Tools" # Fallback for official
                     else: cat = "📦 Other"
                 
+                if cat not in categories: categories[cat] = []
                 categories[cat].append((pkg, info))
 
             # Stats for dashboard

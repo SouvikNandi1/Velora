@@ -1,4 +1,4 @@
-__version__ = "2.8.0"
+__version__ = "3.0.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -829,6 +829,11 @@ class VPMPackageCard(QFrame):
             
         self.content_layout.addLayout(header)
         
+        # Category Badge
+        cat_badge = QLabel(self.category)
+        cat_badge.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.4); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;")
+        self.content_layout.addWidget(cat_badge)
+        
         # Description
         desc = info.get('description', '').replace('✅', '').strip()
         desc_lbl = QLabel(desc)
@@ -905,7 +910,7 @@ class VPMPackageCard(QFrame):
                 border-radius: 12px;
             }}
             #PackageCard:hover {{
-                border: 1px solid {self.theme['border']};
+                border: 1px solid {self.theme['sel']};
                 background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.6);
             }}
             QPushButton {{
@@ -959,38 +964,61 @@ class VPMSidebar(QFrame):
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.buttons = {}
-        categories = [
+        # Sidebar Sections
+        self.layout.addWidget(self._create_section_label("COLLECTIONS"))
+        
+        main_categories = [
             ("All Packages", "all", "📦"),
-            ("Official", "official", "✅"),
+            ("Official", "official", "🛡️"),
             ("Installed", "installed", "💾"),
-            ("Updates", "updates", "🚀"),
-            ("---", "sep1", ""),
+            ("Updates", "updates", "🚀")
+        ]
+        for label, key, icon in main_categories:
+            self._add_category_btn(label, key, icon)
+
+        self.layout.addSpacing(15)
+        self.layout.addWidget(self._create_section_label("DOMAINS"))
+        
+        domain_categories = [
             ("Network", "🛠️ Network", "🛰️"),
             ("System", "🖥️ System", "📊"),
             ("Data/Dev", "🔢 Data", "🛠️"),
             ("Media", "🖼️ Media", "🎬"),
             ("Utilities", "🧰 Utils", "⚙️")
         ]
-
-        for label, key, icon in categories:
-            if label == "---":
-                line = QFrame()
-                line.setFixedHeight(1)
-                line.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(self.theme['border'])}, 0.2); margin: 5px 10px;")
-                self.layout.addWidget(line)
-                continue
-
-            btn = QPushButton(f"{icon}  {label}")
-            btn.setCheckable(True)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.clicked.connect(lambda checked, k=key: self.on_clicked(k))
-            btn.setFixedHeight(40)
-            self.layout.addWidget(btn)
-            self.buttons[key] = btn
+        for label, key, icon in domain_categories:
+            self._add_category_btn(label, key, icon)
+            
+        self.layout.addStretch()
+        
+        # Stats Area
+        self.stats_frame = QFrame()
+        self.stats_frame.setFixedHeight(60)
+        self.stats_frame.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.3); border: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.1); border-radius: 12px; margin: 10px;")
+        stats_layout = QVBoxLayout(self.stats_frame)
+        stats_layout.setContentsMargins(15, 10, 15, 10)
+        self.stats_lbl = QLabel("Library: 0 Tools")
+        self.stats_lbl.setStyleSheet(f"color: {self.theme['sel']}; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;")
+        stats_layout.addWidget(self.stats_lbl)
+        self.layout.addWidget(self.stats_frame)
 
         self.buttons["all"].setChecked(True)
         self.active_category = "all"
         self.apply_styles()
+
+    def _create_section_label(self, text):
+        lbl = QLabel(text)
+        lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.3); font-size: 9px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px; margin-left: 5px;")
+        return lbl
+
+    def _add_category_btn(self, label, key, icon):
+        btn = QPushButton(f"{icon}  {label}")
+        btn.setCheckable(True)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.clicked.connect(lambda checked, k=key: self.on_clicked(k))
+        btn.setFixedHeight(42)
+        self.layout.addWidget(btn)
+        self.buttons[key] = btn
 
     def on_clicked(self, key):
         for k, btn in self.buttons.items():
@@ -1014,20 +1042,23 @@ class VPMSidebar(QFrame):
                 background-color: transparent;
                 color: {self.theme['fg']};
                 border: none;
-                border-radius: 12px;
+                border-left: 3px solid transparent;
+                border-radius: 0px;
                 text-align: left;
                 padding-left: 20px;
                 font-size: 13px;
                 font-weight: 500;
+                margin: 2px 0px;
             }}
             QPushButton:hover {{
-                background-color: rgba({fg_rgb}, 0.1);
+                background-color: rgba({fg_rgb}, 0.08);
+                border-left: 3px solid rgba({sel_rgb}, 0.5);
             }}
             QPushButton:checked {{
-                background-color: {self.theme['sel']};
+                background-color: rgba({sel_rgb}, 0.15);
                 color: {self.theme['fg']};
                 font-weight: bold;
-                border: 1px solid rgba({fg_rgb}, 0.15);
+                border-left: 3px solid {self.theme['sel']};
             }}
         """)
 
@@ -1050,9 +1081,9 @@ class VPMTab(QWidget):
         header_layout = QHBoxLayout(self.header)
         header_layout.setContentsMargins(35, 0, 35, 0)
         
-        title = QLabel("Package Manager")
-        title.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {self.theme['fg']};")
-        header_layout.addWidget(title)
+        self.title_lbl = QLabel("Package Manager")
+        self.title_lbl.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {self.theme['fg']};")
+        header_layout.addWidget(self.title_lbl)
         header_layout.addStretch()
         
         self.search_bar = QLineEdit()
@@ -1081,15 +1112,16 @@ class VPMTab(QWidget):
         self.refresh_btn.clicked.connect(self.refresh_data)
         self.refresh_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {self.theme['sel']};
-                color: {self.theme['fg']};
+                background-color: rgba({_hex_to_rgb_str(self.theme['sel'])}, 0.15);
+                color: {self.theme['sel']};
+                border: 1px solid rgba({_hex_to_rgb_str(self.theme['sel'])}, 0.3);
                 border-radius: 12px;
                 padding: 12px;
                 font-size: 13px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background-color: {self.theme['fg']};
+                background-color: {self.theme['sel']};
                 color: {self.theme['bg']};
             }}
         """)
@@ -1144,6 +1176,14 @@ class VPMTab(QWidget):
         self.worker.finished.connect(self.on_data_loaded)
         self.worker.start()
 
+    def update_stats(self):
+        installed = 0
+        for card in self.cards:
+            if card.local_ver: installed += 1
+        total = len(self.cards)
+        self.sidebar.stats_lbl.setText(f"LIBRARY: {total} TOOLS │ {installed} ACTIVE")
+        self.title_lbl.setText(f"Package Manager ({total})")
+
     def on_data_loaded(self, cloud_data, local_data):
         # Clear loading
         for i in reversed(range(self.grid.count())): 
@@ -1163,6 +1203,7 @@ class VPMTab(QWidget):
             card.action_triggered.connect(self.handle_action)
             self.cards.append(card)
         
+        self.update_stats()
         self.update_view()
 
     def update_view(self):
@@ -1564,7 +1605,7 @@ class TerminalSession(QWidget):
         env.insert("COLORTERM", "truecolor")
         env.insert("VELORA_PYTHON", sys.executable)
         env.insert("VELORA_CORE", os.path.expanduser("~/.velora/core"))
-        env.insert("VELORA_VERSION", "2.8.0")
+        env.insert("VELORA_VERSION", "3.0.0")
         env.insert("VELORA_TERMINAL_PATH", os.path.abspath(sys.argv[0]))
         
         # Inject native wrappers into PATH
@@ -2984,9 +3025,14 @@ class TerminalApp(QMainWindow):
         img_url = QUrl.fromLocalFile(img_file).toString()
 
         # Generate a small close icon SVG for the tabs based on the current theme's foreground color
-        close_icon_svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{theme['fg']}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>"""
-        close_icon_b64 = base64.b64encode(close_icon_svg.encode()).decode()
-        close_icon_url = f"data:image/svg+xml;base64,{close_icon_b64}"
+        close_icon_svg = """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6 L18 18" stroke="#ff5555" stroke-width="3" stroke-linecap="round"/><path d="M18 6 L6 18" stroke="#ff5555" stroke-width="3" stroke-linecap="round"/></svg>"""
+        close_icon_path = os.path.join(os.path.expanduser("~/.velora"), "close_tab.svg")
+        try:
+            with open(close_icon_path, 'w') as f:
+                f.write(close_icon_svg)
+            close_icon_url = close_icon_path.replace('\\', '/')
+        except:
+            close_icon_url = ""
 
         self.setStyleSheet(f"""
             #MainWindow {{
@@ -3042,16 +3088,17 @@ class TerminalApp(QMainWindow):
                 color: {theme['fg']};
             }}
             QTabBar::close-button {{
-                subcontrol-position: right;
+                subcontrol-origin: padding;
+                subcontrol-position: right center;
                 image: url("{close_icon_url}");
-                width: 12px;
-                height: 12px;
-                padding: 4px;
-                margin-right: 8px;
+                width: 16px;
+                height: 16px;
+                padding: 0px;
+                margin-right: 12px;
                 border-radius: 4px;
             }}
             QTabBar::close-button:hover {{
-                background-color: rgba(255, 80, 80, 0.3);
+                background-color: rgba(255, 85, 85, 0.3);
             }}
             QToolButton {{
                 background-color: rgba(255, 255, 255, 0.05);

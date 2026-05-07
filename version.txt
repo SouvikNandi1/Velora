@@ -839,11 +839,13 @@ v2.1.0
 - Enhanced VPM UI with section headers, emojis, and better data visualization.
 - Synchronized ecosystem-wide versioning to v2.1.0 for Terminal, VPM, and Bootstrap.
 
+v3.0.0
+- UI: Major overhaul of the Package Manager with glassmorphism dashboard.
+- VPM: Implemented dynamic category synchronization and tool analytics.
+- TABS: Redesigned high-visibility path-based close buttons with theme-aware hover.
+- STABILITY: Ecosystem hardening and cross-platform SVG rendering fixes.
+
 v2.8.0
-- INSTALLER: Implemented pre-verification logic to skip already installed packages (Verified status).
-- VPM: Finalized cloud-to-local category synchronization for domain-based tool grouping.
-- CORE: All 50+ new tools now correctly indexed by Network, System, Data, and Utility domains.
-- SYNC: Full ecosystem-wide synchronization to v2.8.0.
 
 v2.7.0
 
