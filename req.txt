@@ -328,7 +328,7 @@ yaspin
 alive-progress
 progress
 progressor
- enlighten
+enlighten
 colored
 blessings
 urwid

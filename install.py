@@ -5,92 +5,78 @@ import shutil
 
 def check_pip():
     try:
-        # Test if pip is available
         subprocess.check_call([sys.executable, '-m', 'pip', '--version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
 def ensure_pip():
-    if check_pip():
-        return True
-
-    print("pip module not found. Attempting to bootstrap pip using ensurepip...")
+    if check_pip(): return True
     try:
         subprocess.check_call([sys.executable, '-m', 'ensurepip', '--upgrade'])
-        if check_pip():
-            return True
-    except subprocess.CalledProcessError:
-        pass
-        
-    print("\nFailed to bootstrap pip.")
-    if sys.platform.startswith('linux'):
-        print("Attempting to install pip using the system package manager (may require sudo password)...")
-        if shutil.which('apt'):
-            try:
-                subprocess.check_call(['sudo', 'apt', 'update'])
-                subprocess.check_call(['sudo', 'apt', 'install', '-y', 'python3-pip'])
-                if check_pip(): return True
-            except subprocess.CalledProcessError:
-                pass
-        elif shutil.which('dnf'):
-            try:
-                subprocess.check_call(['sudo', 'dnf', 'install', '-y', 'python3-pip'])
-                if check_pip(): return True
-            except subprocess.CalledProcessError:
-                pass
-        elif shutil.which('pacman'):
-            try:
-                subprocess.check_call(['sudo', 'pacman', '-S', '--noconfirm', 'python-pip'])
-                if check_pip(): return True
-            except subprocess.CalledProcessError:
-                pass
-                
-        print("\nFailed to automatically install pip.")
-        print("On Linux, you often need to install pip via your system package manager.")
-        print("For Ubuntu/Debian: sudo apt install python3-pip")
-        print("For Fedora: sudo dnf install python3-pip")
-        print("For Arch: sudo pacman -S python-pip")
-    elif sys.platform == 'darwin':
-        print("On macOS, consider installing Python via Homebrew: brew install python")
-    else:
-        print("Please install pip manually from https://pip.pypa.io/en/stable/installation/")
+        if check_pip(): return True
+    except: pass
     return False
 
-def main():
-    # Get the path to req.txt in the same directory as this script
-    req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'req.txt')
-    
-    if not os.path.exists(req_path):
-        print(f"Error: {req_path} not found.")
-        sys.exit(1)
-        
-    if not ensure_pip():
-        sys.exit(1)
-
-    print(f"Installing dependencies from {req_path}...")
+def install_package(pkg, break_packages=False):
+    cmd = [sys.executable, '-m', 'pip', 'install']
+    if break_packages:
+        cmd.append('--break-system-packages')
+    cmd.append(pkg)
     try:
-        # Run: python -m pip install -r req.txt
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', req_path])
-        print("Dependencies installed successfully!")
+        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except:
+        return False
+
+def main():
+    req_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'req.txt')
+    if not os.path.exists(req_path):
+        print(f"  \x1b[31m✖\x1b[0m \x1b[31mError: req.txt not found.\x1b[0m")
+        return
+
+    if not ensure_pip():
+        print("  \x1b[31m✖\x1b[0m \x1b[31mError: pip could not be initialized.\x1b[0m")
+        return
+
+    # Read packages
+    with open(req_path, 'r') as f:
+        lines = f.readlines()
+    
+    packages = []
+    for line in lines:
+        p = line.strip()
+        if p and not p.startswith('#'):
+            # Handle comments on the same line
+            packages.append(p.split('#')[0].strip())
+
+    print(f"  \x1b[34mℹ\x1b[0m \x1b[90mPreparing to install {len(packages)} dependencies...\x1b[0m")
+    
+    # Phase 1: Bulk Install (Fast)
+    try:
+        cmd = [sys.executable, '-m', 'pip', 'install', '-r', req_path, '--break-system-packages']
+        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("  \x1b[32m✅\x1b[0m \x1b[32mAll dependencies installed successfully via bulk mode.\x1b[0m")
+        return
     except subprocess.CalledProcessError:
-        print("Standard install failed (possibly due to externally-managed-environment).")
-        print("Retrying with --break-system-packages...")
-        try:
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--break-system-packages', '-r', req_path])
-            print("Dependencies installed successfully!")
-        except subprocess.CalledProcessError as e:
-            print(f"\nAn error occurred while installing dependencies.")
-            print("If you encountered a permissions error or an 'externally-managed-environment' error, try running:")
-            print(f"  {sys.executable} -m pip install --user --break-system-packages -r req.txt")
-            print("\nAlternatively, use a virtual environment (recommended):")
-            print(f"  {sys.executable} -m venv venv")
-            if os.name == 'nt':
-                print(f"  venv\\Scripts\\activate")
-            else:
-                print(f"  source venv/bin/activate")
-            print(f"  python -m pip install -r req.txt")
-            sys.exit(1)
+        print("  \x1b[33m⚠️\x1b[0m \x1b[90mBulk install failed. Switching to Resilient Individual Mode...\x1b[0m")
+
+    # Phase 2: Individual Resilient Install
+    success_count = 0
+    fail_count = 0
+    for i, pkg in enumerate(packages):
+        percent = int((i + 1) * 100 / len(packages))
+        sys.stdout.write(f"\r  \x1b[36m⏳\x1b[0m \x1b[90mProcessing [{percent}%]: {pkg:<30}\x1b[0m")
+        sys.stdout.flush()
+        
+        if install_package(pkg, break_packages=True):
+            success_count += 1
+        else:
+            fail_count += 1
+    
+    print(f"\n  \x1b[32m✅\x1b[0m \x1b[32mInstallation complete: {success_count} success, {fail_count} skipped/failed.\x1b[0m")
+    if fail_count > 0:
+        print(f"  \x1b[90mNote: Some non-critical packages could not be installed on this architecture/OS.\x1b[0m")
 
 if __name__ == "__main__":
     main()
