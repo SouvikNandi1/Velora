@@ -189,11 +189,13 @@ def create_shortcut():
             content = (
                 "[Desktop Entry]\n"
                 "Type=Application\n"
-                f"Name=Velora\n"
-                f"Exec={python_exe} {script_path}\n"
+                "Name=Velora Terminal\n"
+                "Comment=Next-generation Command Orchestration Layer\n"
+                f"Exec=\"{python_exe}\" \"{script_path}\"\n"
                 f"Icon={icon_path}\n"
                 "Terminal=false\n"
-                "Categories=System;TerminalEmulator;\n"
+                "Categories=System;TerminalEmulator;Development;\n"
+                "StartupNotify=true\n"
             )
             with open(shortcut_path, "w") as f:
                 f.write(content)
@@ -201,7 +203,7 @@ def create_shortcut():
 
         elif system == "Darwin": # macOS
             shortcut_path = os.path.join(desktop, "Velora.command")
-            content = f"#!/bin/bash\n{python_exe} {script_path}\n"
+            content = f"#!/bin/bash\n# Launch Velora Terminal\ncd \"{INSTALL_DIR}\"\n\"{python_exe}\" \"{script_path}\"\n"
             with open(shortcut_path, "w") as f:
                 f.write(content)
             os.chmod(shortcut_path, 0o755)
@@ -286,11 +288,22 @@ def main():
         return
 
     # Install dependencies
-    log_step("Installing requirements")
+    log_step("Installing system requirements")
     install_script = os.path.join(INSTALL_DIR, "install.py")
+    req_file = os.path.join(INSTALL_DIR, "req.txt")
+    
     if os.path.exists(install_script):
-        subprocess.run([sys.executable, install_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        log_done("Installed requirements")
+        if not os.path.exists(req_file):
+            log_info("req.txt missing, attempting to skip dependency install...")
+        else:
+            # Run install.py without hiding output so the user can see progress/errors
+            # Especially important for PEP 668 (externally-managed-environment) handling
+            try:
+                subprocess.run([sys.executable, install_script], check=True)
+                log_done("Requirements verified and installed")
+            except subprocess.CalledProcessError:
+                log_error("Dependency installation encountered an issue.")
+                log_info("Try running: python3 -m pip install -r req.txt --break-system-packages")
 
     # Secure the codes so no one can read or change them
     secure_installation(INSTALL_DIR)
