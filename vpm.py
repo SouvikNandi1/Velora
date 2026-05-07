@@ -1,4 +1,4 @@
-__version__ = "2.1.3"
+__version__ = "2.1.7"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -393,7 +393,7 @@ def list_local_packages():
     
     # Add Terminal app to System category
     if "🖥️ System" not in categories: categories["🖥️ System"] = []
-    term_ver = os.environ.get("VELORA_VERSION", "2.1.3")
+    term_ver = os.environ.get("VELORA_VERSION", "2.1.7")
     categories["🖥️ System"].append({
         "name": "Velora Terminal",
         "version": term_ver,
