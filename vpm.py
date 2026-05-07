@@ -1,4 +1,4 @@
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -15,7 +15,9 @@ import time
 import py_compile
 import subprocess
 import platform
-import terminal_utils
+# Force local imports to prevent collision with system packages
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import velora_utils as terminal_utils
 
 
 def clean_version(v):
@@ -225,8 +227,21 @@ def list_packages():
                 
                 categories[cat].append((pkg, info))
 
+            # Stats for dashboard
+            total_pkgs = len(data)
+            official_count = sum(1 for pkg, info in data.items() if isinstance(info, dict) and "✅" in info.get('description', ''))
+            community_count = total_pkgs - official_count
+            installed_count = sum(1 for pkg in data if pkg in local_pkgs)
+
             terminal_utils.print_header("Velora Cloud Registry", color=terminal_utils.PURPLE)
             
+            # Summary Dashboard
+            print(f"  {terminal_utils.CYAN}Total:{terminal_utils.RESET} {total_pkgs:<5} "
+                  f"{terminal_utils.GREEN}Official:{terminal_utils.RESET} {official_count:<5} "
+                  f"{terminal_utils.PINK}Community:{terminal_utils.RESET} {community_count:<5} "
+                  f"{terminal_utils.YELLOW}Installed:{terminal_utils.RESET} {installed_count}")
+            print(f"  {terminal_utils.GREY}" + "─" * 60 + f"{terminal_utils.RESET}\n")
+
             for cat_name, items in categories.items():
                 if not items: continue
                 

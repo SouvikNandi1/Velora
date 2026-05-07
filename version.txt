@@ -838,3 +838,9 @@ v2.1.0
 - Integrated `__category__` metadata across all core programs for improved organization.
 - Enhanced VPM UI with section headers, emojis, and better data visualization.
 - Synchronized ecosystem-wide versioning to v2.1.0 for Terminal, VPM, and Bootstrap.
+
+v2.1.1
+- Enhanced VPM UI with a new summary dashboard showing registry statistics.
+- Fixed boundary and movement bugs in the `snake` core program.
+- Improved color coding and visual hierarchy in the package manager.
+- Synchronized ecosystem-wide versioning to v2.1.1.

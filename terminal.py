@@ -1,4 +1,4 @@
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -35,8 +35,11 @@ import urllib.parse
 import urllib.request
 import json
 import ssl
+# Force local imports to prevent collision with system packages (like 'terminal_utils' from PyPI)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import vpm
-import terminal_utils
+import velora_utils as terminal_utils
 
 # -- NATIVE COMPILED CORE EXECUTOR --
 if len(sys.argv) > 2 and sys.argv[1] == '--run-core':
@@ -1785,6 +1788,18 @@ class TerminalSession(QWidget):
         official = []
         community = []
 
+        # Stats for dashboard
+        total_pkgs = len(cloud_data)
+        installed_pkgs = vpm.get_local_packages_info()
+        installed_names = [p['name'] for p in installed_pkgs]
+        official_count = sum(1 for pkg, info in cloud_data.items() if isinstance(info, dict) and "✅" in info.get('description', ''))
+        community_count = total_pkgs - official_count
+        installed_count = len(installed_names)
+
+        self.insert_ansi_text("\r\n\x1b[38;5;51m\x1b[1m⚡ VELORA CLOUD REGISTRY \x1b[0m\x1b[90m(Package Manager)\x1b[0m\r\n\n")
+        self.insert_ansi_text(f"  \x1b[36mTotal:\x1b[0m {total_pkgs:<5} \x1b[32mOfficial:\x1b[0m {official_count:<5} \x1b[35mCommunity:\x1b[0m {community_count:<5} \x1b[33mInstalled:\x1b[0m {installed_count}\r\n")
+        self.insert_ansi_text(f"  \x1b[90m" + "─" * 60 + "\x1b[0m\r\n\n")
+
         for pkg, info in cloud_data.items():
             if not isinstance(info, dict): continue
             if "✅" in info.get('description', ''):
@@ -1794,8 +1809,6 @@ class TerminalSession(QWidget):
 
         official.sort()
         community.sort()
-
-        self.insert_ansi_text("\r\n\x1b[38;5;51m\x1b[1m⚡ VELORA CLOUD REGISTRY \x1b[0m\x1b[90m(Package Manager)\x1b[0m\r\n\n")
 
         def render_section(title, items, pkg_color, icon=""):
             self.insert_ansi_text(f" \x1b[1m{icon} {title}\x1b[0m\r\n")
