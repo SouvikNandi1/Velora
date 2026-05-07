@@ -22,7 +22,7 @@ import velora_utils
 # Robust fallback for UI utilities to prevent "attribute not found" errors in frozen/dist environments
 def v_print_header(title, color=getattr(velora_utils, 'PURPLE', "\x1b[38;2;189;147;249m")):
     if hasattr(velora_utils, 'print_header'):
-        return v_print_header(title, color)
+        return velora_utils.print_header(title, color)
     # Fallback implementation if module is partially loaded or outdated
     width = 80
     print(f"\n{color}\x1b[1m┏" + "━" * (width - 2) + "┓")
@@ -31,14 +31,14 @@ def v_print_header(title, color=getattr(velora_utils, 'PURPLE', "\x1b[38;2;189;1
 
 def v_print_status(message, type="info"):
     if hasattr(velora_utils, 'print_status'):
-        return v_print_status(message, type)
+        return velora_utils.print_status(message, type)
     # Fallback
     icons = {"success": "✅", "error": "❌", "warning": "⚠️", "info": "ℹ️"}
     print(f"  {icons.get(type, 'ℹ️')} {message}")
 
 def v_print_section(title, color=getattr(velora_utils, 'CYAN', "\x1b[38;2;139;233;253m")):
     if hasattr(velora_utils, 'print_section'):
-        return v_print_section(title, color)
+        return velora_utils.print_section(title, color)
     print(f"\n{color}\x1b[1m─── {title} " + "─" * (75 - len(title)) + "\x1b[0m")
 
 
