@@ -19,37 +19,75 @@ import platform
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import velora_utils
 
-# Safe local constants to prevent attribute errors in frozen/dist environments
-V_PURPLE = getattr(velora_utils, 'PURPLE', "\x1b[38;2;189;147;249m")
-V_CYAN   = getattr(velora_utils, 'CYAN',   "\x1b[38;2;139;233;253m")
-V_GREEN  = getattr(velora_utils, 'GREEN',  "\x1b[38;2;80;250;123m")
-V_PINK   = getattr(velora_utils, 'PINK',   "\x1b[38;2;255;121;198m")
-V_ORANGE = getattr(velora_utils, 'ORANGE', "\x1b[38;2;255;184;108m")
-V_RED    = getattr(velora_utils, 'RED',    "\x1b[38;2;255;85;85m")
-V_YELLOW = getattr(velora_utils, 'YELLOW', "\x1b[38;2;241;250;140m")
-V_GREY   = getattr(velora_utils, 'GREY',   "\x1b[38;2;98;114;164m")
-V_RESET  = getattr(velora_utils, 'RESET',  "\x1b[0m")
-V_BOLD   = getattr(velora_utils, 'BOLD',   "\x1b[1m")
+# --- STABILITY LAYER: PROTECTED UI UTILITIES ---
+# These are inlined to prevent any "AttributeError" in frozen/compiled environments.
+V_PURPLE = "\x1b[38;2;189;147;249m"
+V_CYAN   = "\x1b[38;2;139;233;253m"
+V_GREEN  = "\x1b[38;2;80;250;123m"
+V_PINK   = "\x1b[38;2;255;121;198m"
+V_ORANGE = "\x1b[38;2;255;184;108m"
+V_RED    = "\x1b[38;2;255;85;85m"
+V_YELLOW = "\x1b[38;2;241;250;140m"
+V_GREY   = "\x1b[38;2;98;114;164m"
+V_RESET  = "\x1b[0m"
+V_BOLD   = "\x1b[1m"
 
-# Robust fallback for UI utilities
+def v_get_terminal_width():
+    try: return shutil.get_terminal_size((80, 20)).columns
+    except: return 80
+
 def v_print_header(title, color=V_PURPLE):
-    if hasattr(velora_utils, 'print_header'):
-        return velora_utils.print_header(title, color)
-    width = 80
+    width = min(v_get_terminal_width(), 80)
     print(f"\n{color}{V_BOLD}┏" + "━" * (width - 2) + "┓")
     print(f"┃ {title.center(width - 4)} ┃")
     print(f"┗" + "━" * (width - 2) + f"┛{V_RESET}")
 
-def v_print_status(message, type="info"):
-    if hasattr(velora_utils, 'print_status'):
-        return velora_utils.print_status(message, type)
-    icons = {"success": f"{V_GREEN}✅", "error": f"{V_RED}❌", "warning": f"{V_ORANGE}⚠️", "info": f"{V_CYAN}ℹ️"}
-    print(f"  {icons.get(type, 'ℹ️')} {message}{V_RESET}")
-
 def v_print_section(title, color=V_CYAN):
-    if hasattr(velora_utils, 'print_section'):
-        return velora_utils.print_section(title, color)
-    print(f"\n{color}{V_BOLD}─── {title} " + "─" * (75 - len(title)) + f"{V_RESET}")
+    width = min(v_get_terminal_width(), 80)
+    print(f"\n{color}{V_BOLD}─── {title} " + "─" * (width - len(title) - 5) + f"{V_RESET}")
+
+def v_print_status(message, type="info"):
+    if type == "success": print(f"  {V_GREEN}✅ {message}{V_RESET}")
+    elif type == "error": print(f"  {V_RED}❌ {V_BOLD}Error:{V_RESET} {V_RED}{message}{V_RESET}")
+    elif type == "warning": print(f"  {V_ORANGE}⚠️  {message}{V_RESET}")
+    else: print(f"  {V_CYAN}ℹ️  {message}{V_RESET}")
+
+def v_print_labeled(label, value, label_color=V_GREY, value_color=V_RESET):
+    print(f"  {label_color}{label:<15}{V_RESET} {value_color}{value}{V_RESET}")
+
+class V_Table:
+    def __init__(self, headers, colors=None, width=None):
+        self.headers = headers
+        self.rows = []
+        self.colors = colors or [V_CYAN] * len(headers)
+        self.width = width or min(v_get_terminal_width(), 80)
+    def add_row(self, row): self.rows.append(row)
+    def print(self):
+        col_widths = [len(h) for h in self.headers]
+        for row in self.rows:
+            for i, val in enumerate(row): col_widths[i] = max(col_widths[i], len(str(val)))
+        total_fixed = sum(col_widths[:-1]) + (len(self.headers) * 3)
+        col_widths[-1] = max(col_widths[-1], self.width - total_fixed - 2)
+        header_str = "  "
+        for i, h in enumerate(self.headers): header_str += f"{V_BOLD}{V_GREY}{h:<{col_widths[i]}}{V_RESET}   "
+        print(header_str)
+        print("  " + V_GREY + "─" * (sum(col_widths) + len(self.headers) * 3) + V_RESET)
+        for row in self.rows:
+            row_str = "  "
+            for i, val in enumerate(row):
+                color = self.colors[i] if i < len(self.colors) else V_RESET
+                row_str += f"{color}{str(val):<{col_widths[i]}}{V_RESET}   "
+            print(row_str)
+        print()
+
+def v_progress_bar(current, total, prefix="", suffix="", length=40):
+    percent = float(current) * 100 / total
+    filled_length = int(length * current // total)
+    bar = "█" * filled_length + "░" * (length - filled_length)
+    sys.stdout.write(f"\r  {prefix} {V_CYAN}[{V_GREEN}{bar}{V_CYAN}] {V_BOLD}{percent:>3.0f}%{V_RESET} {suffix}")
+    sys.stdout.flush()
+    if current == total: print()
+# --- END STABILITY LAYER ---
 
 
 def clean_version(v):
@@ -196,15 +234,15 @@ def download_with_progress(req):
                     break
                 chunks.append(chunk)
                 downloaded += len(chunk)
-                velora_utils.progress_bar(downloaded, total_size, prefix="Downloading:", suffix=f"({downloaded/1024:.1f} KB)")
+                v_progress_bar(downloaded, total_size, prefix="Downloading:", suffix=f"({downloaded/1024:.1f} KB)")
             data = b"".join(chunks)
         else:
             data = response.read()
             # Fake progress for unknown size
             for i in range(1, 101, 5):
-                velora_utils.progress_bar(i, 100, prefix="Downloading:", suffix="...")
+                v_progress_bar(i, 100, prefix="Downloading:", suffix="...")
                 time.sleep(0.02)
-            velora_utils.progress_bar(100, 100, prefix="Downloading:", suffix="Done")
+            v_progress_bar(100, 100, prefix="Downloading:", suffix="Done")
         return json.loads(data.decode('utf-8'))
 
 def list_packages():
@@ -278,7 +316,7 @@ def list_packages():
                 if not items: continue
                 
                 v_print_section(cat_name, color=V_CYAN)
-                table = velora_utils.Table(["Package", "Version", "Author", "Description"], 
+                table = V_Table(["Package", "Version", "Author", "Description"], 
                                              colors=[V_CYAN, V_YELLOW, V_PINK, V_RESET])
 
                 items.sort()
@@ -365,7 +403,7 @@ def list_local_packages():
 
     for cat_name, items in sorted(categories.items()):
         v_print_section(cat_name, color=V_PURPLE)
-        table = velora_utils.Table(["Package", "Version", "Author", "Description"], 
+        table = V_Table(["Package", "Version", "Author", "Description"], 
                                      colors=[V_GREEN, V_YELLOW, V_PINK, V_RESET])
         
         for pkg in sorted(items, key=lambda x: x['name']):
@@ -499,7 +537,7 @@ def install_package(pkg_name):
                 
         create_wrapper(pkg_name)
         v_print_status(f"Successfully installed '{pkg_name}'!", type="success")
-        velora_utils.print_labeled("Location", target_path)
+        v_print_labeled("Location", target_path)
     except Exception as e:
         v_print_status(f"Error installing package: {e}", type="error")
 
@@ -955,7 +993,7 @@ def main():
         v_print_header("Velora Package Manager (VPM)", color=V_PURPLE)
         print(f"  {V_BOLD}{V_YELLOW}Usage:{V_RESET}")
         
-        help_table = velora_utils.Table(["Command", "Description"], colors=[V_CYAN, V_GREY])
+        help_table = V_Table(["Command", "Description"], colors=[V_CYAN, V_GREY])
         help_table.add_row(["list", "List all packages on SNCloud"])
         help_table.add_row(["local", "List local installed packages and versions"])
         help_table.add_row(["check", "Check SNCloud for available updates"])
@@ -1026,9 +1064,9 @@ def main():
         if len(args) > 1:
             publish_core_files(args[1])
         else:
-            velora_utils.print_status("Password required. Usage: vpm publish-main <password>", type="error")
+            v_print_status("Password required. Usage: vpm publish-main <password>", type="error")
     else:
-        velora_utils.print_status("Invalid command or missing arguments.", type="error")
+        v_print_status("Invalid command or missing arguments.", type="error")
 
 if __name__ == "__main__":
     main()
