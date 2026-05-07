@@ -839,12 +839,14 @@ v2.1.0
 - Enhanced VPM UI with section headers, emojis, and better data visualization.
 - Synchronized ecosystem-wide versioning to v2.1.0 for Terminal, VPM, and Bootstrap.
 
-v2.1.7
-- NEW: Integrated the high-fidelity `about` core package.
-- DOCUMENTATION: Updated the internal `help.html` with the new about package card.
-- REFINED: Ecosystem-wide synchronization to v2.1.7.
+v2.2.0
+- MAJOR: Expanded the 'Tools' ecosystem with new core programs.
+- NEW: Added `netutil` for advanced network diagnostics (Ping, Port Scan).
+- UPGRADED: `unitconv` now supports Digital Storage (Bytes to Terabytes).
+- UPGRADED: `baseconv` now supports String-to-Numeric base conversions.
+- SYNC: Full ecosystem-wide update to v2.2.0.
 
-v2.1.6
+v2.1.9
 - FINAL: Fully decoupled `vpm.py` from `velora_utils` to ensure absolute stability in compiled Linux environments.
 - STABLE: Synchronized all system components to v2.1.6.
 

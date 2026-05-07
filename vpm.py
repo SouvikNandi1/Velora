@@ -1,4 +1,4 @@
-__version__ = "2.1.7"
+__version__ = "2.2.0"
 __description__ = "The Velora Package Manager. Download, update, publish, or unpublish custom core programs. Use install all to easily grab the entire official suite."
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -909,8 +909,18 @@ def publish_core_files(password):
         v_print_status("Unauthorized. Incorrect password.", type="error")
         return
         
-    v_print_status("Publishing all core files to SNCloud...", type="info")
+    v_print_status("Syncing core files to SNCloud (Full Sync)...", type="info")
     
+    # 1. Fetch current cloud state to detect deletions
+    cloud_pkgs = {}
+    try:
+        url = f"{get_base_url()}.json?_t={int(time.time())}"
+        req = get_request(url)
+        with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
+            cloud_pkgs = json.loads(response.read().decode('utf-8'))
+    except Exception as e:
+        v_print_status(f"Could not fetch cloud state for sync: {e}", type="warning")
+
     help_path = os.path.join(os.path.dirname(BUNDLED_CORE_DIR), 'help.html')
     descriptions = {}
     if os.path.exists(help_path):
@@ -921,13 +931,25 @@ def publish_core_files(password):
             clean_desc = re.sub(r'<[^>]+>', '', desc.strip())
             descriptions[pkg_name] = clean_desc
 
+    # 2. Upload/Update local files
     count = 0
-    pkgs = get_local_packages_dict()
-    for pkg, file_path in pkgs.items():
+    local_pkgs = get_local_packages_dict()
+    for pkg, file_path in local_pkgs.items():
         base_desc = descriptions.get(pkg, "Official Velora Core Program")
         publish_package(pkg, file_path, f"✅ {base_desc}")
         count += 1
-    v_print_status(f"Finished publishing {count} core files.", type="success")
+    
+    # 3. Detect and remove orphaned remote packages (Official only)
+    removed_count = 0
+    for remote_pkg, data in cloud_pkgs.items():
+        # Only target official packages (marked with ✅) that are NOT in our local set
+        if isinstance(data, dict) and str(data.get('description', '')).startswith('✅'):
+            if remote_pkg not in local_pkgs:
+                v_print_status(f"Detected orphaned official package '{remote_pkg}'. Removing...", type="warning")
+                unpublish_package(remote_pkg)
+                removed_count += 1
+
+    v_print_status(f"Sync complete. Published: {count}, Removed: {removed_count}.", type="success")
 
 def publish_terminal():
     if IS_FROZEN:
