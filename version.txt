@@ -888,9 +888,16 @@ v3.5.0
 - OPTIMIZATION: Full responsive support for Desktop Workstations and Mobile Tor Browsers.
 - SECURITY: Hardened the E2EE terminal handshake to support per-peer web access codes.
 
-v3.6.0
-- SETTINGS: Major architectural refactor from a single-page scroll to a professional multi-page tabbed interface.
-- DESIGN: High-fidelity visual overhaul with macOS-inspired window previews and centered glassmorphism layouts.
+v3.7.0
+- ECOSYSTEM: Full synchronization of Terminal, VPM, and Messenger to v3.7.0, with the Core Utility Suite aligned to v2.2.0.
+- CORE: Mass modernization and version synchronization of 80+ core programs to v2.2.0 with high-fidelity ASCII banners and raw-string safety.
+- CALC: Added persistent variable storage and extended math constants (tau, phi).
+- TODO: Implemented priority-based auto-sorting, search, and creation timestamps.
+- NOTES: Overhauled with categorized tags (#tag support), modern table views, and legacy migration logic.
+- SYSINFO: Upgraded to a data-dense diagnostic tool with CPU, Disk, and Memory reporting.
+- IPINFO: Added support for remote IP lookups and expanded ISP metadata.
+- PASSGEN: Integrated entropy analysis, strength ratings, and passphrase generation mode.
+- UI: Standardized all core program headers with premium ASCII banners and Truecolor styling.
+- STABILITY: Fixed QFont point-size warnings and transitioned all banners to raw strings (fr"") to prevent SyntaxWarnings.
+- SETTINGS: Professional multi-page tabbed architecture with macOS-inspired window previews.
 - WINDOWS: Resolved critical input visibility and numeric selection bugs in the Velora Messenger.
-- STABILITY: Fixed QFont point-size warnings and improved printable character forwarding in the terminal core.
-- CLEANUP: Removed legacy cloud/network API settings to streamline the user configuration experience.
