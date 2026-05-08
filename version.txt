@@ -874,3 +874,16 @@ v2.1.1
 - Fixed boundary and movement bugs in the `snake` core program.
 - Improved color coding and visual hierarchy in the package manager.
 - Synchronized ecosystem-wide versioning to v2.1.1.
+
+v3.4.1
+- CORE: Upgraded install-tor (v1.0.4) with Ubuntu-specific hardening and group permissions.
+- CHAT: Hotfix Release (v3.2.1) - Fixed an undefined variable 'conn' in the Hub's message relay loop that was causing incoming messages from peers to be ignored.
+- STABILITY: Improved ecosystem-wide Tor resilience and keyboard event handling for Linux environments.
+
+v3.5.0
+- ONION GATEWAY: Complete architectural overhaul with premium Cyber-Terminal UI and glassmorphism effects.
+- IDENTITY BRIDGE: Implemented Per-User Identity mapping (Terminal -> Web) via unique 4-digit OTPs.
+- AUTHENTICATION: Added a dedicated secure handshake button and interactive verification modal.
+- DISCOVERY: Enhanced Hub signals with web-authentication badges [OTP] for terminal scanning.
+- OPTIMIZATION: Full responsive support for Desktop Workstations and Mobile Tor Browsers.
+- SECURITY: Hardened the E2EE terminal handshake to support per-peer web access codes.

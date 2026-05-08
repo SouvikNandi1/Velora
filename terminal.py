@@ -1,4 +1,4 @@
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -3115,7 +3115,7 @@ class TerminalApp(QMainWindow):
                 border: 1px solid {theme['border']};
             }}
             QStatusBar {{
-                background-color: transparent;
+                background-color: {bg_rgba};
                 color: {theme['border']};
                 border-top: 1px solid {border_rgba};
                 padding: 3px 14px;
