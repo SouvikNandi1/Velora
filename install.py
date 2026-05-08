@@ -3,6 +3,14 @@ import sys
 import os
 import shutil
 
+# Force UTF-8 encoding for stdout on Windows to prevent 'charmap' errors
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except (AttributeError, TypeError):
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+
 # Vibrant Color Palette
 V_PURPLE = "\x1b[38;2;189;147;249m"
 V_CYAN   = "\x1b[38;2;139;233;253m"

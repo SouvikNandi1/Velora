@@ -1,4 +1,4 @@
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __description__ = "Centralized styling and UI utility for Velora Terminal."
 __author__ = "Souvik"
 __website__ = ""
@@ -6,6 +6,36 @@ __website__ = ""
 import sys
 import os
 import shutil
+import platform
+
+# Force UTF-8 encoding for stdout on Windows to prevent 'charmap' errors
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except (AttributeError, TypeError):
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+
+# UI Constants with Windows Fallbacks
+IS_WINDOWS = platform.system() == "Windows"
+UTF8_SUPPORT = getattr(sys.stdout, "encoding", "").lower() == "utf-8"
+
+# Box Drawing Characters
+BOX_TL = "┏" if not IS_WINDOWS or UTF8_SUPPORT else "+"
+BOX_TR = "┓" if not IS_WINDOWS or UTF8_SUPPORT else "+"
+BOX_BL = "┗" if not IS_WINDOWS or UTF8_SUPPORT else "+"
+BOX_BR = "┛" if not IS_WINDOWS or UTF8_SUPPORT else "+"
+BOX_H  = "━" if not IS_WINDOWS or UTF8_SUPPORT else "-"
+BOX_V  = "┃" if not IS_WINDOWS or UTF8_SUPPORT else "|"
+SEP_H  = "─" if not IS_WINDOWS or UTF8_SUPPORT else "-"
+
+# Status Icons
+ICON_OK   = "✅" if not IS_WINDOWS or UTF8_SUPPORT else "[OK]"
+ICON_ERR  = "❌" if not IS_WINDOWS or UTF8_SUPPORT else "[X]"
+ICON_WARN = "⚠️ " if not IS_WINDOWS or UTF8_SUPPORT else "[!]"
+ICON_INFO = "ℹ️ " if not IS_WINDOWS or UTF8_SUPPORT else "[i]"
+ICON_BLOCK = "█" if not IS_WINDOWS or UTF8_SUPPORT else "#"
+ICON_EMPTY = "░" if not IS_WINDOWS or UTF8_SUPPORT else "."
 
 # Premium Color Palette (Truecolor / RGB)
 PURPLE = "\x1b[38;2;189;147;249m"
@@ -24,23 +54,23 @@ def get_terminal_width():
 
 def print_header(title, color=PURPLE):
     width = min(get_terminal_width(), 80)
-    print(f"\n{color}{BOLD}┏" + "━" * (width - 2) + "┓")
-    print(f"┃ {title.center(width - 4)} ┃")
-    print(f"┗" + "━" * (width - 2) + f"┛{RESET}")
+    print(f"\n{color}{BOLD}{BOX_TL}" + BOX_H * (width - 2) + BOX_TR)
+    print(f"{BOX_V} {title.center(width - 4)} {BOX_V}")
+    print(f"{BOX_BL}" + BOX_H * (width - 2) + f"{BOX_BR}{RESET}")
 
 def print_section(title, color=CYAN):
     width = min(get_terminal_width(), 80)
-    print(f"\n{color}{BOLD}─── {title} " + "─" * (width - len(title) - 5) + f"{RESET}")
+    print(f"\n{color}{BOLD}{SEP_H}{SEP_H}{SEP_H} {title} " + SEP_H * (width - len(title) - 5) + f"{RESET}")
 
 def print_status(message, type="info"):
     if type == "success":
-        print(f"  {GREEN}✅ {message}{RESET}")
+        print(f"  {GREEN}{ICON_OK} {message}{RESET}")
     elif type == "error":
-        print(f"  {RED}❌ {BOLD}Error:{RESET} {RED}{message}{RESET}")
+        print(f"  {RED}{ICON_ERR} {BOLD}Error:{RESET} {RED}{message}{RESET}")
     elif type == "warning":
-        print(f"  {ORANGE}⚠️  {message}{RESET}")
+        print(f"  {ORANGE}{ICON_WARN} {message}{RESET}")
     else:
-        print(f"  {CYAN}ℹ️  {message}{RESET}")
+        print(f"  {CYAN}{ICON_INFO} {message}{RESET}")
 
 def print_labeled(label, value, label_color=GREY, value_color=RESET):
     print(f"  {label_color}{label:<15}{RESET} {value_color}{value}{RESET}")
@@ -71,7 +101,7 @@ class Table:
         for i, h in enumerate(self.headers):
             header_str += f"{BOLD}{GREY}{h:<{col_widths[i]}}{RESET}   "
         print(header_str)
-        print("  " + GREY + "─" * (sum(col_widths) + len(self.headers) * 3) + RESET)
+        print("  " + GREY + SEP_H * (sum(col_widths) + len(self.headers) * 3) + RESET)
 
         # Print Rows
         for row in self.rows:
@@ -85,7 +115,7 @@ class Table:
 def progress_bar(current, total, prefix="", suffix="", length=40):
     percent = float(current) * 100 / total
     filled_length = int(length * current // total)
-    bar = "█" * filled_length + "░" * (length - filled_length)
+    bar = ICON_BLOCK * filled_length + ICON_EMPTY * (length - filled_length)
     sys.stdout.write(f"\r  {prefix} {CYAN}[{GREEN}{bar}{CYAN}] {BOLD}{percent:>3.0f}%{RESET} {suffix}")
     sys.stdout.flush()
     if current == total:

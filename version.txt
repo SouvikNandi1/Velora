@@ -901,3 +901,19 @@ v3.7.0
 - STABILITY: Fixed QFont point-size warnings and transitioned all banners to raw strings (fr"") to prevent SyntaxWarnings.
 - SETTINGS: Professional multi-page tabbed architecture with macOS-inspired window previews.
 - WINDOWS: Resolved critical input visibility and numeric selection bugs in the Velora Messenger.
+
+v3.8.0
+- TERMINAL: Major modernization of the PTY engine and ANSI parser to support professional TUI apps.
+- TUI: Full compatibility for `htop`, `vim`, and `nano` with Alternate Screen Buffer support.
+- MOUSE: Integrated XTerm mouse reporting for interactive CLI menus and scroll interactions.
+- PASTE: Implemented Bracketed Paste Mode (`?2004h`) for secure handling of large command blocks.
+- UI: Redesigned the AI Oracle Assistant with a high-fidelity glassmorphism aesthetic and gradient interactions.
+- BRANDING: Upgraded startup branding with truecolor gradients and high-fidelity block ASCII art.
+- STABILITY: Optimized text insertion performance in raw mode using chunked buffer processing.
+- SYNC: Full ecosystem-wide version synchronization to v3.8.0 across Terminal, VPM, and Bootstrap.
+
+v3.8.1
+- WINDOWS: Resolved critical 'charmap' encoding crashes by enforcing UTF-8 output and implementing ASCII fallbacks for box-drawing characters.
+- FETCH: Upgraded with a high-fidelity Windows quadrant logo and Truecolor branding.
+- UTILS: Refactored 'velora_utils.py' and 50+ core programs with a robust stability layer for cross-platform UI consistency.
+- BOOTSTRAP: Synchronized ecosystem-wide versioning to v3.8.1 across Terminal, VPM, and Installer.

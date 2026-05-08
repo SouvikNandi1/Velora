@@ -7,9 +7,17 @@ import urllib.request
 import base64
 import ssl
 
+# Force UTF-8 encoding for stdout on Windows to prevent 'charmap' errors
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except (AttributeError, TypeError):
+        import codecs
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
-VERSION = "3.5.0"
+VERSION = "3.8.1"
 REPO_URL = "https://github.com/SouvikNandi1/Velora/archive/refs/heads/main.zip"
 INSTALL_DIR = os.path.expanduser("~/.velora/app")
 

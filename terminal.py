@@ -1,4 +1,4 @@
-__version__ = "3.7.0"
+__version__ = "3.8.1"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -255,6 +255,11 @@ class TerminalDisplay(QPlainTextEdit):
         self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         
         self.apply_theme()
+        self.alternate_screen_active = False
+        self.saved_main_screen = ""
+        self.saved_cursor_pos = None
+        self.mouse_reporting = False
+        self.bracketed_paste = False
 
     def apply_theme(self):
         settings = QSettings("Velora", "Settings")
@@ -410,6 +415,10 @@ class TerminalDisplay(QPlainTextEdit):
                 if reply == QMessageBox.StandardButton.No:
                     return
 
+            if self.bracketed_paste:
+                self.control_sequence.emit(f"\x1b[200~{text}\x1b[201~")
+                return
+
             cursor = self.textCursor()
             # Ensure we are pasting at the end of the input if cursor is in history
             if cursor.position() < self.input_start_pos:
@@ -452,6 +461,22 @@ class TerminalDisplay(QPlainTextEdit):
             if url:
                 QDesktopServices.openUrl(QUrl(url))
                 return
+        
+        if self.mouse_reporting and not (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            # Basic XTerm Mouse Tracking (SGR-like or simple)
+            # For now, just send simple click reporting if enabled
+            fm = self.fontMetrics()
+            char_width = fm.horizontalAdvance('M')
+            char_height = fm.height()
+            col = (event.pos().x() // char_width) + 1
+            row = (event.pos().y() // char_height) + 1
+            # Send \x1b[M<btn><x><y> (simple xterm mouse)
+            # btn: 32 for left click, 33 for middle, 34 for right
+            btn = 32 if event.button() == Qt.MouseButton.LeftButton else 34
+            seq = f"\x1b[M{chr(btn)}{chr(min(255, col + 32))}{chr(min(255, row + 32))}"
+            self.control_sequence.emit(seq)
+            return
+
         super().mousePressEvent(event)
 
     def dragEnterEvent(self, event):
@@ -532,8 +557,8 @@ class TerminalDisplay(QPlainTextEdit):
             self.settings_requested.emit()
 
     def keyPressEvent(self, event):
-        # Handle RAW MODE for fullscreen apps like 'nano' or 'vim'
-        if self.in_raw_mode:
+        # Handle RAW MODE / ALTERNATE SCREEN for fullscreen apps like 'htop', 'nano', 'vim'
+        if self.in_raw_mode or self.alternate_screen_active:
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
                     if event.key() == Qt.Key.Key_V:
@@ -2194,42 +2219,58 @@ class TerminalSession(QWidget):
             shell_name = os.path.basename(shell)
             # Custom PTY Proxy Engine to natively intercept window resizing events
             pty_cmd = (
-                "import pty, os, sys, select, fcntl, termios, struct, re\n"
+                "import pty, os, sys, select, fcntl, termios, struct, re, signal\n"
                 "pid, fd = pty.fork()\n"
                 "if pid == 0:\n"
-                f"    os.execvp('{shell}', ['{shell_name}', '-i'])\n"
+                "    try:\n"
+                f"        os.execvp('{shell}', ['{shell_name}', '-i'])\n"
+                "    except Exception as e:\n"
+                "        print(f'Exec failed: {e}')\n"
+                "        sys.exit(1)\n"
+                "def handle_resize(signum, frame):\n"
+                "    pass # Resizing handled via custom escape sequences\n"
+                "signal.signal(signal.SIGWINCH, handle_resize)\n"
                 "while True:\n"
-                "    r, _, _ = select.select([0, fd], [], [])\n"
-                "    if 0 in r:\n"
-                "        d = os.read(0, 4096)\n"
-                "        if not d: break\n"
-                "        m = re.search(b'\\\\x1b\\\\]999;(\\\\d+);(\\\\d+)\\\\x07', d)\n"
-                "        if m:\n"
-                "            try: fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', int(m.group(1)), int(m.group(2)), 0, 0))\n"
-                "            except: pass\n"
-                "            d = re.sub(b'\\\\x1b\\\\]999;\\\\d+;\\\\d+\\\\x07', b'', d)\n"
-                "        if d: os.write(fd, d)\n"
-                "    if fd in r:\n"
-                "        try: d = os.read(fd, 4096)\n"
-                "        except OSError: break\n"
-                "        if not d: break\n"
-                "        os.write(1, d)\n"
+                "    try:\n"
+                "        r, _, _ = select.select([0, fd], [], [])\n"
+                "        if 0 in r:\n"
+                "            d = os.read(0, 8192)\n"
+                "            if not d: break\n"
+                "            # Intercept custom resize sequences: \\x1b]999;rows;cols\\x07\n"
+                "            m = re.search(b'\\\\x1b\\\\]999;(\\\\d+);(\\\\d+)\\\\x07', d)\n"
+                "            if m:\n"
+                "                try:\n"
+                "                    rows, cols = int(m.group(1)), int(m.group(2))\n"
+                "                    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, cols, 0, 0))\n"
+                "                except: pass\n"
+                "                d = re.sub(b'\\\\x1b\\\\]999;\\\\d+;\\\\d+\\\\x07', b'', d)\n"
+                "            if d: os.write(fd, d)\n"
+                "        if fd in r:\n"
+                "            try: d = os.read(fd, 8192)\n"
+                "            except OSError: break\n"
+                "            if not d: break\n"
+                "            os.write(1, d)\n"
+                "    except (KeyboardInterrupt, EOFError): break\n"
+                "    except Exception: break\n"
             )
             self.process.start(sys.executable, ["-c", pty_cmd])
             
 
         
+        # High-Fidelity Truecolor Startup Banner
+        banner_color = "\x1b[38;2;139;233;253m" # Cyanish
+        accent_color = "\x1b[38;2;189;147;249m" # Purple
+        
         ascii_logo = (
-            "\x1b[36;1m"
-            " ██╗   ██╗███████╗██╗      ██████╗ ██████╗  █████╗ \r\n"
-            " ██║   ██║██╔════╝██║     ██╔═══██╗██╔══██╗██╔══██╗\r\n"
-            " ██║   ██║█████╗  ██║     ██║   ██║██████╔╝███████║\r\n"
-            " ╚██╗ ██╔╝██╔══╝  ██║     ██║   ██║██╔══██╗██╔══██║\r\n"
-            "  ╚████╔╝ ███████╗███████╗╚██████╔╝██║  ██║██║  ██║\r\n"
-            "   ╚═══╝  ╚══════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝\r\n"
+            f"{banner_color}██╗   ██╗███████╗██╗      ██████╗ ██████╗  █████╗ \r\n"
+            f"{banner_color}██║   ██║██╔════╝██║     ██╔═══██╗██╔══██╗██╔══██╗\r\n"
+            f"{accent_color}██║   ██║█████╗  ██║     ██║   ██║██████╔╝███████║\r\n"
+            f"{accent_color}╚██╗ ██╔╝██╔══╝  ██║     ██║   ██║██╔══██╗██╔══██║\r\n"
+            f"{accent_color} ╚████╔╝ ███████╗███████╗╚██████╔╝██║  ██║██║  ██║\r\n"
+            f"{accent_color}  ╚═══╝  ╚══════╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝\x1b[0m\r\n"
             "                                                   \r\n"
-            "      \x1b[35;1mE L E V A T E  Y O U R  W O R K F L O W\x1b[0m      \r\n"
-            f"          \x1b[90mVelora Terminal Core v{__version__}\x1b[0m\r\n\r\n"
+            f"      \x1b[38;2;255;121;198;1mE L E V A T E  Y O U R  W O R K F L O W\x1b[0m\r\n"
+            f"          \x1b[90mVelora Terminal Core v{__version__} | Native PTY Mode\x1b[0m\r\n\r\n"
         )
         self.insert_ansi_text(ascii_logo)
         
@@ -2643,17 +2684,21 @@ class TerminalSession(QWidget):
         if not text:
             return
             
-        if hasattr(self.output_area, 'in_raw_mode') and self.output_area.in_raw_mode:
-            for char in text:
-                if char == '\r':
+        is_raw = (hasattr(self.output_area, 'in_raw_mode') and self.output_area.in_raw_mode) or \
+                 (hasattr(self.output_area, 'alternate_screen_active') and self.output_area.alternate_screen_active)
+
+        if is_raw:
+            # Fast path for raw mode using split instead of char-by-char
+            parts = re.split(r'([\r\n\b])', text)
+            for part in parts:
+                if part == '\r':
                     cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                elif char == '\n':
+                elif part == '\n':
                     col = cursor.positionInBlock()
                     if cursor.blockNumber() == self.output_area.document().blockCount() - 1:
                         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
                         cursor.insertText('\n', self.current_format)
-                        if col > 0:
-                            cursor.insertText(' ' * col)
+                        if col > 0: cursor.insertText(' ' * col)
                     else:
                         cursor.movePosition(QTextCursor.MoveOperation.Down)
                         block_len = cursor.block().length() - 1
@@ -2662,19 +2707,20 @@ class TerminalSession(QWidget):
                             cursor.insertText(' ' * (col - block_len), self.current_format)
                         else:
                             cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                            if col > 0: cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, col)
-                elif char == '\b':
-                    if cursor.positionInBlock() > 0:
-                        cursor.movePosition(QTextCursor.MoveOperation.Left)
-                else:
-                    if cursor.positionInBlock() < cursor.block().length() - 1:
-                        cursor.deleteChar()
-                    cursor.insertText(char, self.current_format)
+                            if col > 0: cursor.movePosition(QTextCursor.MoveOperation.Right, n=col)
+                elif part == '\b':
+                    if cursor.positionInBlock() > 0: cursor.movePosition(QTextCursor.MoveOperation.Left)
+                elif part:
+                    # Overwrite logic
+                    chars_avail = cursor.block().length() - 1 - cursor.positionInBlock()
+                    if chars_avail > 0:
+                        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, min(len(part), chars_avail))
+                        cursor.removeSelectedText()
+                    cursor.insertText(part, self.current_format)
             return
 
         def _overwrite(text_to_insert):
-            if not text_to_insert:
-                return
+            if not text_to_insert: return
             lines = text_to_insert.split('\n')
             for idx, line in enumerate(lines):
                 if idx > 0:
@@ -2682,8 +2728,7 @@ class TerminalSession(QWidget):
                     if cursor.blockNumber() == self.output_area.document().blockCount() - 1:
                         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
                         cursor.insertText('\n', self.current_format)
-                        if col > 0:
-                            cursor.insertText(' ' * col, self.current_format)
+                        if col > 0: cursor.insertText(' ' * col, self.current_format)
                     else:
                         cursor.movePosition(QTextCursor.MoveOperation.Down)
                         block_len = cursor.block().length() - 1
@@ -2692,7 +2737,7 @@ class TerminalSession(QWidget):
                             cursor.insertText(' ' * (col - block_len), self.current_format)
                         else:
                             cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                            if col > 0: cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, col)
+                            if col > 0: cursor.movePosition(QTextCursor.MoveOperation.Right, n=col)
                 if line:
                     chars_avail = cursor.block().length() - 1 - cursor.positionInBlock()
                     if chars_avail > 0:
@@ -2702,14 +2747,12 @@ class TerminalSession(QWidget):
 
         parts_b = text.split('\b')
         for i, part in enumerate(parts_b):
-            if i > 0:
-                if cursor.positionInBlock() > 0:
-                    cursor.deletePreviousChar()
+            if i > 0 and cursor.positionInBlock() > 0:
+                cursor.deletePreviousChar()
 
             if '\r' in part:
                 sub_parts = part.split('\r')
                 _overwrite(sub_parts[0])
-
                 for sub_part in sub_parts[1:]:
                     cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
                     _overwrite(sub_part)
@@ -2718,28 +2761,52 @@ class TerminalSession(QWidget):
 
 
     def insert_ansi_text(self, text):
-        # Strip OSC sequences (e.g. window title, hyperlinks) — both BEL and ST terminated
+        # Handle OSC 0/1/2 (Title setting)
+        title_match = re.search(r'\x1b\][012];([^\x07\x1b]*)(?:\x07|\x1b\\)', text)
+        if title_match:
+            new_title = title_match.group(1)
+            # Update tab title if we can find the parent tab widget
+            try:
+                parent = self.parent()
+                while parent and not isinstance(parent, QTabWidget):
+                    parent = parent.parent()
+                if parent:
+                    idx = parent.indexOf(self)
+                    if idx != -1: parent.setTabText(idx, new_title)
+            except: pass
+            text = re.sub(r'\x1b\][012];[^\x07\x1b]*(?:\x07|\x1b\\)', '', text)
+
+        # Strip remaining OSC sequences (e.g. hyperlinks)
         text = re.sub(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)', '', text)
+
+        # Cursor Save/Restore (DECSC/DECRC)
+        if '\x1b7' in text:
+            cursor = self.output_area.textCursor()
+            self.output_area.saved_cursor_pos = (cursor.blockNumber(), cursor.positionInBlock())
+            text = text.replace('\x1b7', '')
+        if '\x1b8' in text:
+            if self.output_area.saved_cursor_pos:
+                row, col = self.output_area.saved_cursor_pos
+                cursor = self.output_area.textCursor()
+                cursor.movePosition(QTextCursor.MoveOperation.Start)
+                if row > 0: cursor.movePosition(QTextCursor.MoveOperation.NextBlock, n=row)
+                cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+                if col > 0: cursor.movePosition(QTextCursor.MoveOperation.Right, n=col)
+                self.output_area.setTextCursor(cursor)
+            text = text.replace('\x1b8', '')
 
         # Strip DCS / PM / APC / SOS sequences
         text = re.sub(r'\x1b[PX^_][^\x1b]*(?:\x1b\\|$)', '', text)
 
-        # Strip non-CSI two-char ESC sequences:
-        #   \x1b7 / \x1b8  — DECSC/DECRC save/restore cursor  → produce literal 7/8 if not stripped
-        #   \x1b[()][...] — G0/G1 charset designations  e.g. \x1b(B
-        #   \x1bM          — reverse index (scroll up one line)
-        #   \x1b[=><]      — keypad modes
-        #   \x1bN/O        — single-shift SS2/SS3
-        text = re.sub(r'\x1b[78NOMEHcl]', '', text)
+        # Strip remaining non-CSI two-char ESC sequences
+        text = re.sub(r'\x1b[NOMEHcl]', '', text)
         text = re.sub(r'\x1b[()][a-zA-Z0-9]', '', text)
         text = re.sub(r'\x1b[=><]', '', text)
 
-        # Strip CSI sequences we intentionally ignore (cursor visibility, mouse tracking, etc.)
-        # These are the ?NNNh / ?NNNl forms not handled in the main loop
-        text = re.sub(r'\x1b\[\?(?!1049|1047|47)\d+[hl]', '', text)
-
+        # Handle CSI sequences
         cursor = self.output_area.textCursor()
         
+        # Save user input if they are typing
         cursor.setPosition(self.output_area.input_start_pos)
         cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
         user_input = cursor.selectedText()
@@ -2763,36 +2830,24 @@ class TerminalSession(QWidget):
             if seq.endswith('m'):
                 code_str = seq[:-1]
                 codes = code_str.split(';') if code_str else ['0']
-                    
                 idx = 0
                 while idx < len(codes):
                     code = codes[idx]
-                    
                     if code in ('38', '48') and idx + 4 < len(codes) and codes[idx+1] == '2':
                         try:
                             r, g, b = int(codes[idx+2]), int(codes[idx+3]), int(codes[idx+4])
-                            if code == '38':
-                                self.current_format.setForeground(QColor(r, g, b))
-                            else:
-                                self.current_format.setBackground(QColor(r, g, b))
-                        except ValueError:
-                            pass
+                            if code == '38': self.current_format.setForeground(QColor(r, g, b))
+                            else: self.current_format.setBackground(QColor(r, g, b))
+                        except ValueError: pass
                         idx += 5
                         continue
-                        
-                    if code == '0' or code == '00':
-                        self.current_format = QTextCharFormat()
-                    elif code in COLOR_MAP:
-                        self.current_format.setForeground(QColor(COLOR_MAP[code]))
-                    elif code in BG_COLOR_MAP:
-                        self.current_format.setBackground(QColor(BG_COLOR_MAP[code]))
-                    elif code == '1' or code == '01':
-                        self.current_format.setFontWeight(QFont.Weight.Bold)
+                    if code == '0' or code == '00': self.current_format = QTextCharFormat()
+                    elif code in COLOR_MAP: self.current_format.setForeground(QColor(COLOR_MAP[code]))
+                    elif code in BG_COLOR_MAP: self.current_format.setBackground(QColor(BG_COLOR_MAP[code]))
+                    elif code == '1' or code == '01': self.current_format.setFontWeight(QFont.Weight.Bold)
                     elif code == '39':
-                        if hasattr(self, 'current_theme'):
-                            self.current_format.setForeground(QColor(self.current_theme['fg']))
-                    elif code == '49':
-                        self.current_format.clearBackground()
+                        if hasattr(self, 'current_theme'): self.current_format.setForeground(QColor(self.current_theme['fg']))
+                    elif code == '49': self.current_format.clearBackground()
                     elif code == '7':
                         if hasattr(self, 'current_theme'):
                             self.current_format.setBackground(QColor(self.current_theme['fg']))
@@ -2800,7 +2855,6 @@ class TerminalSession(QWidget):
                     elif code == '27':
                         self.current_format.clearBackground()
                         self.current_format.clearForeground()
-                        
                     idx += 1
             elif seq.endswith('K'):
                 if seq == 'K' or seq == '0K':
@@ -2819,21 +2873,6 @@ class TerminalSession(QWidget):
                     cursor.removeSelectedText()
                     cursor.insertText(' ' * min(n, chars_avail), self.current_format)
                     cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, min(n, chars_avail))
-            elif seq.endswith('L'):
-                n = int(seq[:-1]) if seq[:-1].isdigit() else 1
-                col = cursor.positionInBlock()
-                cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                cursor.insertText('\n' * n)
-                cursor.movePosition(QTextCursor.MoveOperation.Up, QTextCursor.MoveMode.MoveAnchor, n)
-                cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, col)
-            elif seq.endswith('M'):
-                n = int(seq[:-1]) if seq[:-1].isdigit() else 1
-                col = cursor.positionInBlock()
-                cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                for _ in range(n):
-                    cursor.movePosition(QTextCursor.MoveOperation.Down, QTextCursor.MoveMode.KeepAnchor)
-                cursor.removeSelectedText()
-                cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, col)
             elif seq.endswith('A'):
                 n = int(seq[:-1]) if seq[:-1].isdigit() else 1
                 cursor.movePosition(QTextCursor.MoveOperation.Up, n=n)
@@ -2863,31 +2902,26 @@ class TerminalSession(QWidget):
                     cursor.movePosition(QTextCursor.MoveOperation.End)
                     cursor.insertText('\n')
                 cursor.movePosition(QTextCursor.MoveOperation.Start)
-                if row > 1: cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.MoveAnchor, row - 1)
+                if row > 1: cursor.movePosition(QTextCursor.MoveOperation.NextBlock, n=row - 1)
                 cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
                 block_len = cursor.block().length() - 1
-                if block_len < col:
-                    cursor.insertText(' ' * (col - block_len))
+                if block_len < col: cursor.insertText(' ' * (col - block_len))
                 cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                if col > 0: cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, col)
+                if col > 0: cursor.movePosition(QTextCursor.MoveOperation.Right, n=col)
             elif seq.endswith('H') or seq.endswith('f'):
                 m = re.match(r'^([0-9]*);?([0-9]*)[Hf]$', seq)
                 if m:
                     row = int(m.group(1)) if m.group(1) else 1
                     col = int(m.group(2)) if m.group(2) else 1
                     cursor.movePosition(QTextCursor.MoveOperation.End)
-                    while self.output_area.document().blockCount() < row:
-                        cursor.insertText('\n')
+                    while self.output_area.document().blockCount() < row: cursor.insertText('\n')
                     cursor.movePosition(QTextCursor.MoveOperation.Start)
-                    if row > 1: cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.MoveAnchor, row - 1)
+                    if row > 1: cursor.movePosition(QTextCursor.MoveOperation.NextBlock, n=row - 1)
                     cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock)
                     block_len = cursor.block().length() - 1
-                    if block_len < col - 1:
-                        cursor.insertText(' ' * (col - 1 - block_len))
+                    if block_len < col - 1: cursor.insertText(' ' * (col - 1 - block_len))
                     cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-                    if col > 1: cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.MoveAnchor, col - 1)
-                else:
-                    cursor.movePosition(QTextCursor.MoveOperation.Start)
+                    if col > 1: cursor.movePosition(QTextCursor.MoveOperation.Right, n=col - 1)
             elif seq.endswith('J'):
                 if seq in ('2J', '3J'):
                     self.output_area.clear()
@@ -2898,12 +2932,26 @@ class TerminalSession(QWidget):
                 elif seq == '1J':
                     cursor.movePosition(QTextCursor.MoveOperation.Start, QTextCursor.MoveMode.KeepAnchor)
                     cursor.removeSelectedText()
-            elif seq in ('?1049h', '?1047h', '?47h'):
-                self.output_area.in_raw_mode = True
-                self.output_area.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
-            elif seq in ('?1049l', '?1047l', '?47l'):
-                self.output_area.in_raw_mode = False
-                self.output_area.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+            elif seq.endswith('h'):
+                if seq in ('?1049h', '?1047h', '?47h'):
+                    if not self.output_area.alternate_screen_active:
+                        self.output_area.saved_main_screen = self.output_area.toHtml()
+                        self.output_area.alternate_screen_active = True
+                        self.output_area.clear()
+                        self.output_area.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+                        cursor = self.output_area.textCursor()
+                elif seq == '?1000h': self.output_area.mouse_reporting = True
+                elif seq == '?2004h': self.output_area.bracketed_paste = True
+            elif seq.endswith('l'):
+                if seq in ('?1049l', '?1047l', '?47l'):
+                    if self.output_area.alternate_screen_active:
+                        self.output_area.setHtml(self.output_area.saved_main_screen)
+                        self.output_area.alternate_screen_active = False
+                        self.output_area.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+                        cursor = self.output_area.textCursor()
+                        cursor.movePosition(QTextCursor.MoveOperation.End)
+                elif seq == '?1000l': self.output_area.mouse_reporting = False
+                elif seq == '?2004l': self.output_area.bracketed_paste = False
             
             self.insert_text_with_cr(cursor, text_part)
             
@@ -3010,49 +3058,62 @@ class AIAssistant(QFrame):
     def __init__(self, theme, parent=None):
         super().__init__(parent)
         self.theme = theme
-        self.setFixedHeight(50)
+        self.setFixedHeight(54)
         self.setObjectName("AIAssistant")
+        self.setStyleSheet(f"""
+            QFrame#AIAssistant {{
+                background: rgba({_hex_to_rgb_str(theme['bg'])}, 0.6);
+                border-bottom: 1px solid rgba({_hex_to_rgb_str(theme['border'])}, 0.2);
+            }}
+        """)
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(15, 0, 15, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(20, 0, 20, 0)
+        layout.setSpacing(12)
         
         icon = QLabel("✨")
-        icon.setStyleSheet("font-size: 18px;")
+        icon.setStyleSheet("font-size: 20px; color: #8be9fd;")
         layout.addWidget(icon)
         
         self.input = QLineEdit()
         self.input.setPlaceholderText("Ask the Velora Oracle... (e.g., 'How do I list large files?')")
         self.input.setStyleSheet(f"""
             QLineEdit {{
-                background: rgba({_hex_to_rgb_str(theme['bg'])}, 0.2);
-                border: 1px solid rgba({_hex_to_rgb_str(theme['border'])}, 0.3);
-                border-radius: 8px;
+                background: rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba({_hex_to_rgb_str(theme['border'])}, 0.4);
+                border-radius: 12px;
                 color: {theme['fg']};
-                padding: 6px 12px;
-                font-size: 13px;
-                font-weight: 500;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-family: 'Inter', 'Segoe UI', sans-serif;
             }}
             QLineEdit:focus {{
-                border: 1px solid {theme['sel']};
-                background: rgba({_hex_to_rgb_str(theme['bg'])}, 0.4);
+                border: 1px solid #bd93f9;
+                background: rgba(0, 0, 0, 0.5);
             }}
         """)
 
         self.input.returnPressed.connect(self.process_query)
         layout.addWidget(self.input)
         
-        self.btn = QPushButton("Ask")
-        self.btn.setFixedWidth(60)
+        self.btn = QPushButton("Consult")
+        self.btn.setFixedWidth(85)
         self.btn.setStyleSheet(f"""
             QPushButton {{
-                background: {theme['sel']};
-                color: {theme['fg']};
-                border: 1px solid {theme['border']};
-                border-radius: 4px;
-                padding: 4px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #bd93f9, stop:1 #ff79c6);
+                color: #ffffff;
+                border: none;
+                border-radius: 10px;
+                padding: 6px;
+                font-weight: bold;
+                font-size: 12px;
             }}
-            QPushButton:hover {{ background: {theme['border']}; }}
+            QPushButton:hover {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ff79c6, stop:1 #bd93f9);
+            }}
+            QPushButton:pressed {{
+                background: #44475a;
+            }}
         """)
         self.btn.clicked.connect(self.process_query)
         layout.addWidget(self.btn)
