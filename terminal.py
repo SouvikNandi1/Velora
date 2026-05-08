@@ -1753,9 +1753,7 @@ class SettingsTab(QWidget):
 
         resources = [
             ("GitHub Repository", "https://github.com/SouvikNandi1/Velora", "#50fa7b"),
-            ("Official Website", __website__, "#8be9fd"),
-            ("Documentation", "https://velora.dev/docs", "#ff79c6"),
-            ("Support Discord", "https://discord.gg/velora", "#bd93f9")
+            ("Official Website", __website__, "#8be9fd")
         ]
 
         for i, (name, url, color) in enumerate(resources):
