@@ -1,4 +1,4 @@
-__version__ = "3.1.0"
+__version__ = "3.6.0"
 __description__ = "Velora Terminal Core Application"
 __author__ = "Souvik"
 __website__ = "https://github.com/SouvikNandi1/Velora"
@@ -144,7 +144,7 @@ if hasattr(signal, 'SIGTTOU'):
 if hasattr(signal, 'SIGTTIN'):
     signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit, QScrollArea, QFrame, QGridLayout, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPlainTextEdit, QLineEdit, QMenu, QDialog, QFormLayout, QComboBox, QSpinBox, QDialogButtonBox, QLabel, QTabWidget, QToolButton, QInputDialog, QPushButton, QSlider, QHBoxLayout, QCompleter, QMessageBox, QSplitter, QTextEdit, QScrollArea, QFrame, QGridLayout, QGraphicsDropShadowEffect, QCheckBox, QStackedWidget
 from PyQt6.QtCore import QProcess, Qt, pyqtSignal, QSettings, QProcessEnvironment, QStringListModel, QUrl, QThread, QRegularExpression, QTimer
 from PyQt6.QtGui import QFont, QTextCursor, QColor, QTextCharFormat, QFontDatabase, QKeySequence, QShortcut, QDesktopServices, QIcon, QTextDocument, QAction, QPainter, QLinearGradient
 import urllib.request
@@ -253,6 +253,68 @@ class TerminalDisplay(QPlainTextEdit):
         self.completer.setWidget(self)
         self.completer.setCompletionMode(QCompleter.CompletionMode.InlineCompletion)
         self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        
+        self.apply_theme()
+
+    def apply_theme(self):
+        settings = QSettings("Velora", "Settings")
+        theme_name = settings.value("theme", "Dracula (Dark)")
+        theme = THEMES.get(theme_name, THEMES["Dracula (Dark)"])
+        bg_rgb = _hex_to_rgb_str(theme['bg'])
+        fg_rgb = _hex_to_rgb_str(theme['fg'])
+        sel_rgb = _hex_to_rgb_str(theme['sel'])
+        border_rgb = _hex_to_rgb_str(theme['border'])
+
+        self.setStyleSheet(f"""
+            QPlainTextEdit {{
+                background-color: transparent;
+                color: {theme['fg']};
+                border: none;
+                selection-background-color: rgba({sel_rgb}, 0.5);
+                selection-color: {theme['fg']};
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 8px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba({border_rgb}, 0.2);
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgba({border_rgb}, 0.4);
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar:horizontal {{
+                background: transparent;
+                height: 8px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: rgba({border_rgb}, 0.2);
+                min-width: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0px;
+            }}
+        """)
+
+    def apply_font(self):
+        settings = QSettings("Velora", "Settings")
+        family = settings.value("font_family", "Menlo" if sys.platform == "darwin" else "Consolas" if os.name == "nt" else "DejaVu Sans Mono")
+        try:
+            size = int(settings.value("font_size", 11))
+            if size <= 0: size = 11
+        except (ValueError, TypeError):
+            size = 11
+        font = QFont(family, size)
+        self.setFont(font)
+        self.resize_terminal()
 
     def _load_history(self):
         if not os.path.exists(HISTORY_FILE):
@@ -332,7 +394,7 @@ class TerminalDisplay(QPlainTextEdit):
 
     def zoom_out(self):
         font = self.font()
-        font.setPointSize(max(1, font.pointSize() - 1))
+        font.setPointSize(max(6, font.pointSize() - 1))
         self.setFont(font)
         self.zoom_changed.emit(font.pointSize())
 
@@ -523,8 +585,10 @@ class TerminalDisplay(QPlainTextEdit):
             elif key == Qt.Key.Key_Tab: self.control_sequence.emit("\t")
             elif key == Qt.Key.Key_Escape: self.control_sequence.emit("\x1b")
             else:
-                if event.text(): self.control_sequence.emit(event.text())
+                if event.text(): 
+                    self.control_sequence.emit(event.text())
             return
+
 
         cursor = self.textCursor()
         
@@ -607,7 +671,7 @@ class TerminalDisplay(QPlainTextEdit):
                 return
             elif event.key() == Qt.Key.Key_Minus:
                 font = self.font()
-                font.setPointSize(max(1, font.pointSize() - 1))
+                font.setPointSize(max(6, font.pointSize() - 1))
                 self.setFont(font)
                 self.zoom_changed.emit(font.pointSize())
                 return
@@ -676,7 +740,8 @@ class TerminalDisplay(QPlainTextEdit):
             return
 
         # Force cursor to end for normal typing if it's before input_start_pos
-        if event.text() and cursor.position() < self.input_start_pos:
+        is_printable = bool(event.text() and event.text().isprintable())
+        if is_printable and cursor.position() < self.input_start_pos:
             cursor.movePosition(QTextCursor.MoveOperation.End)
             self.setTextCursor(cursor)
 
@@ -783,6 +848,7 @@ class VPMPackageCard(QFrame):
         self.info = info
         self.theme = theme
         self.setObjectName("PackageCard")
+        self.setFixedWidth(360) # Consistent card width
         
         self.local_ver = next((p['version'] for p in local_info if p['name'] == name), None)
         self.cloud_ver = info.get('version', '1.0.0')
@@ -790,141 +856,198 @@ class VPMPackageCard(QFrame):
         self.is_official = "✅" in info.get('description', '')
         self.update_available = self.local_ver and is_newer(self.cloud_ver, self.local_ver)
         
-        # Main horizontal layout
-        self.main_layout = QHBoxLayout(self)
+        # Main vertical layout
+        self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         
-        # Sidebar Status Accent
-        self.accent_bar = QFrame()
-        self.accent_bar.setFixedWidth(4)
-        self.main_layout.addWidget(self.accent_bar)
-        
-        # Content Layout
-        self.content_widget = QWidget()
-        self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(15, 15, 15, 15)
-        self.content_layout.setSpacing(8)
+        # Inner content container for glassmorphism
+        self.inner = QFrame()
+        self.inner.setObjectName("InnerCard")
+        self.inner_layout = QVBoxLayout(self.inner)
+        self.inner_layout.setContentsMargins(20, 20, 20, 20)
+        self.inner_layout.setSpacing(12)
         
         # Header: Icon and Name
         header = QHBoxLayout()
-        icon_lbl = QLabel("📦" if not self.is_official else "🛡️")
-        icon_lbl.setStyleSheet("font-size: 22px;")
-        header.addWidget(icon_lbl)
+        header.setSpacing(12)
         
+        # Icon Container
+        self.icon_frame = QFrame()
+        self.icon_frame.setFixedSize(48, 48)
+        self.icon_frame.setObjectName("IconFrame")
+        icon_layout = QVBoxLayout(self.icon_frame)
+        icon_layout.setContentsMargins(0, 0, 0, 0)
+        icon_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        icon_lbl = QLabel("📦" if not self.is_official else "🛡️")
+        icon_lbl.setStyleSheet("font-size: 24px;")
+        icon_layout.addWidget(icon_lbl)
+        header.addWidget(self.icon_frame)
+        
+        # Name and Author
+        title_box = QVBoxLayout()
+        title_box.setSpacing(2)
         name_lbl = QLabel(name)
-        name_lbl.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {theme['fg']};")
-        header.addWidget(name_lbl)
+        name_lbl.setStyleSheet(f"font-size: 18px; font-weight: 800; color: {theme['fg']}; letter-spacing: -0.5px;")
+        title_box.addWidget(name_lbl)
+        
+        author = info.get('author', 'Unknown')
+        author_lbl = QLabel(f"by {author}")
+        author_lbl.setStyleSheet(f"font-size: 11px; color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.4); font-weight: 500;")
+        title_box.addWidget(author_lbl)
+        header.addLayout(title_box)
         header.addStretch()
         
+        # Badges
         if self.is_official:
-            badge = QLabel("OFFICIAL")
-            badge.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(theme['sel'])}, 0.2); color: {theme['fg']}; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; border: 1px solid {theme['sel']};")
-            header.addWidget(badge)
+            badge = QLabel("VERIFIED")
+            badge.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(theme['sel'])}, 0.25); color: {theme['fg']}; font-size: 8px; font-weight: 900; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba({_hex_to_rgb_str(theme['sel'])}, 0.4); text-transform: uppercase; letter-spacing: 1px;")
+            header.addWidget(badge, alignment=Qt.AlignmentFlag.AlignTop)
             
-        if self.update_available:
-            upd_badge = QLabel("UPDATE")
-            upd_badge.setStyleSheet("background-color: rgba(255, 184, 108, 0.2); color: #ffb86c; font-size: 9px; font-weight: bold; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255, 184, 108, 0.4);")
-            header.addWidget(upd_badge)
-            
-        self.content_layout.addLayout(header)
+        self.inner_layout.addLayout(header)
         
-        # Category Badge
-        cat_badge = QLabel(self.category)
-        cat_badge.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.4); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;")
-        self.content_layout.addWidget(cat_badge)
-        
-        # Description
+        # Description (clamped)
         desc = info.get('description', '').replace('✅', '').strip()
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
-        desc_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.7); font-size: 12px; line-height: 1.4;")
-        self.content_layout.addWidget(desc_lbl)
+        desc_lbl.setMinimumHeight(45)
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
+        desc_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.7); font-size: 13px; line-height: 1.4; font-weight: 400;")
+        self.inner_layout.addWidget(desc_lbl)
         
-        self.content_layout.addStretch()
+        # Metadata Strip
+        meta_strip = QHBoxLayout()
         
-        # Metadata
-        meta = QHBoxLayout()
-        author = info.get('author', 'Unknown')
-        ver_str = f"v{self.cloud_ver}"
+        # Version Badge
+        ver_lbl = QLabel()
         if self.local_ver:
             if self.update_available:
-                ver_str = f"<span style='color: gray;'>v{self.local_ver}</span> <span style='color: {theme['border']};'>➜</span> <span style='color: #50fa7b;'>v{self.cloud_ver}</span>"
+                ver_lbl.setText(f"v{self.local_ver} ➜ v{self.cloud_ver}")
+                ver_lbl.setStyleSheet(f"color: #ffb86c; background: rgba(255, 184, 108, 0.1); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: bold;")
             else:
-                ver_str = f"<span style='color: #50fa7b;'>v{self.local_ver} (Latest)</span>"
+                ver_lbl.setText(f"v{self.local_ver} (Current)")
+                ver_lbl.setStyleSheet(f"color: #50fa7b; background: rgba(80, 250, 123, 0.1); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: bold;")
+        else:
+            ver_lbl.setText(f"v{self.cloud_ver}")
+            ver_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.5); background: rgba({_hex_to_rgb_str(theme['fg'])}, 0.05); padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: bold;")
+        meta_strip.addWidget(ver_lbl)
         
-        meta_lbl = QLabel(f"By {author}  •  {ver_str}")
-        meta_lbl.setStyleSheet(f"font-size: 10px; color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.5);")
-        meta.addWidget(meta_lbl)
-        self.content_layout.addLayout(meta)
+        # Category
+        cat_lbl = QLabel(self.category.split()[-1] if ' ' in self.category else self.category)
+        cat_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.3); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;")
+        meta_strip.addStretch()
+        meta_strip.addWidget(cat_lbl)
+        self.inner_layout.addLayout(meta_strip)
         
-        # Buttons
+        self.inner_layout.addSpacing(4)
+        
+        # Actions
         btn_box = QHBoxLayout()
+        btn_box.setSpacing(10)
+        
         if not self.local_ver:
-            self.main_btn = QPushButton("Install")
+            self.main_btn = QPushButton("Install Package")
             self.main_btn.setObjectName("InstallBtn")
         elif self.update_available:
-            self.main_btn = QPushButton("Update")
+            self.main_btn = QPushButton("Update to Latest")
             self.main_btn.setObjectName("UpdateBtn")
         else:
-            self.main_btn = QPushButton("Remove")
+            self.main_btn = QPushButton("Uninstall")
             self.main_btn.setObjectName("RemoveBtn")
             
         self.main_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.main_btn.setFixedHeight(42)
         self.main_btn.clicked.connect(self.on_btn_clicked)
-        btn_box.addWidget(self.main_btn)
+        btn_box.addWidget(self.main_btn, 4)
         
-        self.info_btn = QPushButton("ℹ")
-        self.info_btn.setFixedWidth(35)
+        self.info_btn = QPushButton("Locate")
+        self.info_btn.setObjectName("InfoBtn")
+        self.info_btn.setFixedHeight(42)
         self.info_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.info_btn.clicked.connect(lambda: self.action_triggered.emit("info", self.name))
-        btn_box.addWidget(self.info_btn)
+        btn_box.addWidget(self.info_btn, 1)
         
-        self.content_layout.addLayout(btn_box)
-        self.main_layout.addWidget(self.content_widget)
+        self.inner_layout.addLayout(btn_box)
+        
+        # --- Accent Strip ---
+        self.accent_strip = QFrame(self.inner)
+        self.accent_strip.setFixedWidth(4)
+        self.accent_strip.setFixedHeight(120)
+        self.accent_strip.move(0, 40) # Position below title area
+        self.accent_strip.setObjectName("AccentStrip")
+        
+        self.main_layout.addWidget(self.inner)
+
+        
+        # Add subtle shadow if possible
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setXOffset(0)
+        shadow.setYOffset(4)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        self.setGraphicsEffect(shadow)
         
         self.apply_styles()
 
     def apply_styles(self):
         bg = f"rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.4)"
-        border = f"rgba({_hex_to_rgb_str(self.theme['border'])}, 0.3)"
+        border = f"rgba({_hex_to_rgb_str(self.theme['border'])}, 0.2)"
         sel = self.theme['sel']
         fg = self.theme['fg']
         
-        # Accent Bar Color
-        accent_color = "transparent"
-        if self.local_ver:
-            if self.update_available:
-                accent_color = "#ffb86c" # Orange
-            else:
-                accent_color = "#50fa7b" # Green
-        elif self.is_official:
-            accent_color = "#bd93f9" # Purple
-            
-        self.accent_bar.setStyleSheet(f"background-color: {accent_color}; border-top-left-radius: 12px; border-bottom-left-radius: 12px;")
+        # Icon Frame Color
+        icon_bg = f"rgba({_hex_to_rgb_str(self.theme['sel'])}, 0.15)"
+        accent_color = self.theme['sel']
+        if self.is_official: 
+            icon_bg = "rgba(189, 147, 249, 0.15)"
+            accent_color = "#bd93f9"
+        elif self.category == "🎮 Games": accent_color = "#ff79c6"
+        elif self.category == "🖥️ System": accent_color = "#8be9fd"
+        elif self.category == "🛠️ Tools": accent_color = "#50fa7b"
         
         self.setStyleSheet(f"""
-            #PackageCard {{
+            #InnerCard {{
                 background-color: {bg};
                 border: 1px solid {border};
-                border-radius: 12px;
+                border-radius: 16px;
             }}
-            #PackageCard:hover {{
-                border: 1px solid {self.theme['sel']};
-                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.6);
+            #InnerCard:hover {{
+                border: 1px solid rgba({_hex_to_rgb_str(accent_color)}, 0.5);
+                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.5);
+            }}
+            #AccentStrip {{
+                background-color: {accent_color};
+                border-top-right-radius: 2px;
+                border-bottom-right-radius: 2px;
+            }}
+            #IconFrame {{
+                background-color: {icon_bg};
+                border-radius: 12px;
+                border: 1px solid rgba({_hex_to_rgb_str(accent_color)}, 0.1);
             }}
             QPushButton {{
-                background-color: {sel};
-                color: {fg};
-                border: none;
-                border-radius: 8px;
-                padding: 8px;
-                font-size: 11px;
-                font-weight: bold;
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: 800;
+                letter-spacing: 0.5px;
             }}
-            QPushButton:hover {{
-                background-color: {fg};
+            #InstallBtn {{
+                background-color: {accent_color};
                 color: {self.theme['bg']};
+                border: none;
+            }}
+            #InstallBtn:hover {{
+                background-color: {self.theme['fg']};
+                color: {self.theme['bg']};
+            }}
+            #UpdateBtn {{
+                background-color: #ffb86c;
+                color: #282a36;
+                border: none;
+            }}
+            #UpdateBtn:hover {{
+                background-color: #ffcc88;
             }}
             #RemoveBtn {{
                 background-color: rgba(255, 85, 85, 0.1);
@@ -935,20 +1058,25 @@ class VPMPackageCard(QFrame):
                 background-color: #ff5555;
                 color: white;
             }}
-            #UpdateBtn {{
-                background-color: rgba(255, 184, 108, 0.1);
-                color: #ffb86c;
-                border: 1px solid rgba(255, 184, 108, 0.2);
+            #InfoBtn {{
+                background-color: rgba(255, 255, 255, 0.05);
+                color: {self.theme['fg']};
+                border: 1px solid rgba(255, 255, 255, 0.1);
             }}
-            #UpdateBtn:hover {{
-                background-color: #ffb86c;
-                color: #282a36;
+            #InfoBtn:hover {{
+                background-color: rgba(255, 255, 255, 0.1);
             }}
         """)
 
+
     def on_btn_clicked(self):
-        action = self.main_btn.text().lower()
+        btn_text = self.main_btn.text().lower()
+        if "install" in btn_text: action = "install"
+        elif "update" in btn_text: action = "update"
+        elif "uninstall" in btn_text: action = "remove"
+        else: action = "install"
         self.action_triggered.emit(action, self.name)
+
 
 class VPMSidebar(QFrame):
     category_changed = pyqtSignal(str)
@@ -959,8 +1087,8 @@ class VPMSidebar(QFrame):
         self.setFixedWidth(240)
         self.setObjectName("VPMSidebar")
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(15, 20, 15, 20)
-        self.layout.setSpacing(10)
+        self.layout.setContentsMargins(12, 20, 12, 20)
+        self.layout.setSpacing(6)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.buttons = {}
@@ -969,22 +1097,22 @@ class VPMSidebar(QFrame):
         
         main_categories = [
             ("All Packages", "all", "📦"),
-            ("Official", "official", "🛡️"),
-            ("Installed", "installed", "💾"),
-            ("Updates", "updates", "🚀")
+            ("Official Suite", "official", "🛡️"),
+            ("Library", "installed", "💾"),
+            ("Pending Updates", "updates", "🚀")
         ]
         for label, key, icon in main_categories:
             self._add_category_btn(label, key, icon)
 
-        self.layout.addSpacing(15)
+        self.layout.addSpacing(20)
         self.layout.addWidget(self._create_section_label("DOMAINS"))
         
         domain_categories = [
-            ("Network", "🛠️ Network", "🛰️"),
-            ("System", "🖥️ System", "📊"),
-            ("Data/Dev", "🔢 Data", "🛠️"),
-            ("Media", "🖼️ Media", "🎬"),
-            ("Utilities", "🧰 Utils", "⚙️")
+            ("Automation", "🛠️ Tools", "⚙️"),
+            ("System Utils", "🖥️ System", "📊"),
+            ("Creative", "✨ Fun", "🎨"),
+            ("Network", "🛰️ Network", "🌐"),
+            ("Games", "🎮 Games", "🎮")
         ]
         for label, key, icon in domain_categories:
             self._add_category_btn(label, key, icon)
@@ -993,12 +1121,18 @@ class VPMSidebar(QFrame):
         
         # Stats Area
         self.stats_frame = QFrame()
-        self.stats_frame.setFixedHeight(60)
-        self.stats_frame.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.3); border: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.1); border-radius: 12px; margin: 10px;")
+        self.stats_frame.setFixedHeight(70)
+        self.stats_frame.setObjectName("StatsFrame")
         stats_layout = QVBoxLayout(self.stats_frame)
-        stats_layout.setContentsMargins(15, 10, 15, 10)
-        self.stats_lbl = QLabel("Library: 0 Tools")
-        self.stats_lbl.setStyleSheet(f"color: {self.theme['sel']}; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;")
+        stats_layout.setContentsMargins(15, 12, 15, 12)
+        stats_layout.setSpacing(4)
+        
+        self.stats_title = QLabel("LIBRARY STATUS")
+        self.stats_title.setStyleSheet(f"color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.3); font-size: 9px; font-weight: 900; letter-spacing: 1.5px;")
+        stats_layout.addWidget(self.stats_title)
+        
+        self.stats_lbl = QLabel("Initializing...")
+        self.stats_lbl.setStyleSheet(f"color: {self.theme['fg']}; font-size: 11px; font-weight: 700;")
         stats_layout.addWidget(self.stats_lbl)
         self.layout.addWidget(self.stats_frame)
 
@@ -1008,7 +1142,7 @@ class VPMSidebar(QFrame):
 
     def _create_section_label(self, text):
         lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.3); font-size: 9px; font-weight: 800; letter-spacing: 2px; margin-bottom: 5px; margin-left: 5px;")
+        lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.25); font-size: 10px; font-weight: 900; letter-spacing: 2px; margin-bottom: 8px; margin-left: 15px;")
         return lbl
 
     def _add_category_btn(self, label, key, icon):
@@ -1016,7 +1150,7 @@ class VPMSidebar(QFrame):
         btn.setCheckable(True)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.clicked.connect(lambda checked, k=key: self.on_clicked(k))
-        btn.setFixedHeight(42)
+        btn.setFixedHeight(44)
         self.layout.addWidget(btn)
         self.buttons[key] = btn
 
@@ -1034,33 +1168,40 @@ class VPMSidebar(QFrame):
 
         self.setStyleSheet(f"""
             #VPMSidebar {{
-                background-color: rgba({bg_rgb}, 0.15);
-                border-right: 1px solid rgba({border_rgb}, 0.2);
-                border-radius: 0px;
+                background-color: rgba({bg_rgb}, 0.1);
+                border-right: 1px solid rgba({border_rgb}, 0.1);
+            }}
+            #StatsFrame {{
+                background-color: rgba({bg_rgb}, 0.3);
+                border: 1px solid rgba({border_rgb}, 0.15);
+                border-radius: 12px;
+                margin-top: 10px;
             }}
             QPushButton {{
                 background-color: transparent;
-                color: {self.theme['fg']};
+                color: rgba({fg_rgb}, 0.6);
                 border: none;
-                border-left: 3px solid transparent;
-                border-radius: 0px;
+                border-radius: 8px;
                 text-align: left;
-                padding-left: 20px;
+                padding-left: 18px;
                 font-size: 13px;
-                font-weight: 500;
+                font-weight: 600;
                 margin: 2px 0px;
             }}
             QPushButton:hover {{
-                background-color: rgba({fg_rgb}, 0.08);
-                border-left: 3px solid rgba({sel_rgb}, 0.5);
+                background-color: rgba({fg_rgb}, 0.05);
+                color: {self.theme['fg']};
             }}
             QPushButton:checked {{
-                background-color: rgba({sel_rgb}, 0.15);
-                color: {self.theme['fg']};
-                font-weight: bold;
+                background-color: rgba({sel_rgb}, 0.2);
+                color: {self.theme['sel']};
+                font-weight: 800;
                 border-left: 3px solid {self.theme['sel']};
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
             }}
         """)
+
 
 class VPMTab(QWidget):
     def __init__(self, settings, parent=None):
@@ -1074,40 +1215,58 @@ class VPMTab(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         
-        # Header (formerly toolbar)
+        # Header Area
         self.header = QFrame()
-        self.header.setFixedHeight(90)
-        self.header.setStyleSheet(f"background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.1); border-bottom: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.2);")
+        self.header.setFixedHeight(120)
+        self.header.setObjectName("VPMHeader")
         header_layout = QHBoxLayout(self.header)
-        header_layout.setContentsMargins(35, 0, 35, 0)
+        header_layout.setContentsMargins(40, 0, 40, 0)
         
-        self.title_lbl = QLabel("Package Manager")
-        self.title_lbl.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {self.theme['fg']};")
-        header_layout.addWidget(self.title_lbl)
+        title_box = QVBoxLayout()
+        title_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_box.setSpacing(4)
+        
+        self.title_lbl = QLabel("Velora Intelligence Registry")
+        self.title_lbl.setStyleSheet(f"font-size: 28px; font-weight: 900; color: {self.theme['fg']}; letter-spacing: -1px;")
+        title_box.addWidget(self.title_lbl)
+        
+        self.subtitle_lbl = QLabel("Browse, install and manage high-performance core modules.")
+        self.subtitle_lbl.setStyleSheet(f"font-size: 13px; color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.4); font-weight: 500;")
+        title_box.addWidget(self.subtitle_lbl)
+        header_layout.addLayout(title_box)
+        
         header_layout.addStretch()
         
+        # Search Box with Icon
+        search_container = QWidget()
+        search_layout = QHBoxLayout(search_container)
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search packages...")
-        self.search_bar.setFixedWidth(320)
+        self.search_bar.setPlaceholderText("Search tools, services, or authors...")
+        self.search_bar.setFixedWidth(380)
         self.search_bar.textChanged.connect(lambda: self.update_view())
         self.search_bar.setStyleSheet(f"""
             QLineEdit {{
-                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.3);
-                border: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.4);
-                border-radius: 12px;
-                padding: 12px 18px;
+                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.4);
+                border: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.3);
+                border-radius: 14px;
+                padding: 14px 22px;
                 color: {self.theme['fg']};
-                font-size: 13px;
+                font-size: 14px;
+                font-weight: 500;
             }}
             QLineEdit:focus {{
                 border: 1px solid {self.theme['sel']};
-                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.5);
+                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.6);
             }}
         """)
-        header_layout.addWidget(self.search_bar)
+        search_layout.addWidget(self.search_bar)
+        header_layout.addWidget(search_container)
         
-        self.refresh_btn = QPushButton("↻ Refresh Registry")
-        self.refresh_btn.setFixedWidth(150)
+        self.refresh_btn = QPushButton("↻")
+        self.refresh_btn.setFixedSize(48, 48)
+        self.refresh_btn.setToolTip("Refresh Registry")
         self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_btn.clicked.connect(self.refresh_data)
         self.refresh_btn.setStyleSheet(f"""
@@ -1115,9 +1274,8 @@ class VPMTab(QWidget):
                 background-color: rgba({_hex_to_rgb_str(self.theme['sel'])}, 0.15);
                 color: {self.theme['sel']};
                 border: 1px solid rgba({_hex_to_rgb_str(self.theme['sel'])}, 0.3);
-                border-radius: 12px;
-                padding: 12px;
-                font-size: 13px;
+                border-radius: 14px;
+                font-size: 20px;
                 font-weight: bold;
             }}
             QPushButton:hover {{
@@ -1128,34 +1286,47 @@ class VPMTab(QWidget):
         header_layout.addWidget(self.refresh_btn)
         self.main_layout.addWidget(self.header)
         
-        # Content (Sidebar + Grid)
-        self.content_layout = QHBoxLayout()
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
-        self.content_layout.setSpacing(0)
+        # Main Body
+        self.body_layout = QHBoxLayout()
+        self.body_layout.setContentsMargins(0, 0, 0, 0)
+        self.body_layout.setSpacing(0)
         
         self.sidebar = VPMSidebar(self.theme)
         self.sidebar.category_changed.connect(self.on_category_changed)
-        self.content_layout.addWidget(self.sidebar)
+        self.body_layout.addWidget(self.sidebar)
         
-        # Grid area
+        # Grid View
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("background: transparent; border: none;")
+        self.scroll.horizontalScrollBar().setEnabled(False)
         
         self.container = QWidget()
-        self.container.setStyleSheet("background: transparent;")
+        self.container.setObjectName("GridContainer")
         self.grid = QGridLayout(self.container)
-        self.grid.setSpacing(25)
-        self.grid.setContentsMargins(35, 35, 35, 35)
+        self.grid.setSpacing(30)
+        self.grid.setContentsMargins(40, 30, 40, 40)
         self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         
         self.scroll.setWidget(self.container)
-        self.content_layout.addWidget(self.scroll)
+        self.body_layout.addWidget(self.scroll)
         
-        self.main_layout.addLayout(self.content_layout)
+        self.main_layout.addLayout(self.body_layout)
+        
+        # Styling for the main tab
+        self.setStyleSheet(f"""
+            #VPMHeader {{
+                background-color: rgba({_hex_to_rgb_str(self.theme['bg'])}, 0.15);
+                border-bottom: 1px solid rgba({_hex_to_rgb_str(self.theme['border'])}, 0.2);
+            }}
+            #GridContainer {{
+                background-color: transparent;
+            }}
+        """)
         
         self.cards = []
         self.refresh_data()
+
 
     def on_category_changed(self, category):
         self.current_category = category
@@ -1273,106 +1444,513 @@ class VPMTab(QWidget):
             self.update_view()
 
 class SettingsTab(QWidget):
-
     settings_applied = pyqtSignal()
     history_cleared = pyqtSignal()
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.settings = settings
+        self.theme_name = settings.value("theme", "Dracula (Dark)")
+        self.theme = THEMES.get(self.theme_name, THEMES["Dracula (Dark)"])
         
-        self.layout = QVBoxLayout(self)
-        self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.layout.setContentsMargins(30, 30, 30, 30)
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
         
-        self.form_layout = QFormLayout()
-        self.layout.addLayout(self.form_layout)
+        # Left Sidebar for Categories
+        self.sidebar = QFrame()
+        self.sidebar.setFixedWidth(240)
+        self.sidebar.setObjectName("SettingsSidebar")
+        self.sidebar_layout = QVBoxLayout(self.sidebar)
+        self.sidebar_layout.setContentsMargins(20, 40, 20, 20)
+        self.sidebar_layout.setSpacing(8)
+        self.sidebar_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         
-        self.font_combo = QComboBox()
-        self.font_combo.addItems(QFontDatabase.families())
+        self.cat_btns = {}
+        categories = [
+            ("Appearance", "🎨"),
+            ("Behavior", "⚙️"),
+            ("About", "ℹ️")
+        ]
         
-        self.size_spin = QSpinBox()
-        self.size_spin.setRange(6, 72)
+        for name, icon in categories:
+            btn = QPushButton(f"  {icon}   {name}")
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(44)
+            btn.clicked.connect(lambda checked, n=name: self.switch_category(n))
+            self.sidebar_layout.addWidget(btn)
+            self.cat_btns[name] = btn
+
+            
+        self.sidebar_layout.addStretch()
+        
+        # Pro Tip Section at bottom of sidebar
+        self.tip_frame = QFrame()
+        self.tip_frame.setObjectName("TipFrame")
+        self.tip_frame.setFixedHeight(120)
+        tip_layout = QVBoxLayout(self.tip_frame)
+        
+        tip_title = QLabel("💡 PRO TIP")
+        tip_title.setStyleSheet("font-size: 9px; font-weight: 900; color: #ffb86c; letter-spacing: 1px;")
+        tip_layout.addWidget(tip_title)
+        
+        tips = [
+            "Use 'vpm list' to browse cloud modules.",
+            "Double-click a tab to rename it.",
+            "Type 'fetch' for system information.",
+            "VPM supports custom SNCloud endpoints.",
+            "Glass opacity can be adjusted in Appearance.",
+            "Use 'vpm update-all' to sync your library.",
+            "Right-click the terminal for quick actions."
+        ]
+        import random
+        self.tip_lbl = QLabel(random.choice(tips))
+        self.tip_lbl.setWordWrap(True)
+        self.tip_lbl.setStyleSheet(f"font-size: 11px; color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.5); font-style: italic;")
+        tip_layout.addWidget(self.tip_lbl)
+        
+        self.sidebar_layout.addWidget(self.tip_frame)
+        self.main_layout.addWidget(self.sidebar)
+
+        
+        # Right Side Content
+        self.content_stack = QWidget()
+        self.content_layout = QVBoxLayout(self.content_stack)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(0)
+        
+        # Header
+        self.header = QFrame()
+        self.header.setFixedHeight(90)
+        self.header.setObjectName("SettingsHeader")
+        header_layout = QHBoxLayout(self.header)
+        header_layout.setContentsMargins(40, 0, 40, 0)
+        
+        title_box = QVBoxLayout()
+        title_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.title_lbl = QLabel("System Configuration")
+        self.title_lbl.setStyleSheet(f"font-size: 24px; font-weight: 900; color: {self.theme['fg']}; letter-spacing: -0.5px;")
+        title_box.addWidget(self.title_lbl)
+        
+        self.subtitle_lbl = QLabel("Manage your terminal aesthetics and behavioral parameters.")
+        self.subtitle_lbl.setStyleSheet(f"font-size: 13px; color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.4); font-weight: 500;")
+        title_box.addWidget(self.subtitle_lbl)
+        
+        header_layout.addLayout(title_box)
+
+        header_layout.addStretch()
+        
+        self.save_btn = QPushButton("Apply Changes")
+        self.save_btn.setObjectName("PrimaryBtn")
+        self.save_btn.setFixedWidth(140)
+        self.save_btn.setFixedHeight(36)
+        self.save_btn.clicked.connect(self.save_settings)
+        header_layout.addWidget(self.save_btn)
+        self.content_layout.addWidget(self.header)
+        
+        # Content Stack for different pages
+        self.pages = QStackedWidget()
+        self.pages.setObjectName("SettingsPages")
+        
+        # --- Appearance Page ---
+        self.appearance_page = QWidget()
+        app_page_layout = QVBoxLayout(self.appearance_page)
+        app_page_layout.setContentsMargins(40, 20, 40, 40)
+        app_page_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        
+        self.appearance_card = self._create_card("Aesthetics & Visuals")
+        self.appearance_card.setFixedWidth(680)
+        app_layout = QFormLayout(self.appearance_card)
+        app_layout.setContentsMargins(30, 30, 30, 30)
+        app_layout.setSpacing(20)
+
         
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(THEMES.keys())
+        self.theme_combo.setCurrentText(self.theme_name)
+        app_layout.addRow(self._create_label("Interface Theme"), self.theme_combo)
+        
+        self.font_combo = QComboBox()
+        self.font_combo.addItems(QFontDatabase.families())
+        default_font = "Menlo" if sys.platform == "darwin" else "Consolas" if os.name == 'nt' else "DejaVu Sans Mono"
+        self.font_combo.setCurrentText(self.settings.value("font_family", default_font))
+        app_layout.addRow(self._create_label("Terminal Font"), self.font_combo)
+        
+        self.size_spin = QSpinBox()
+        self.size_spin.setRange(6, 72)
+        self.size_spin.setValue(int(self.settings.value("font_size", 11)))
+        app_layout.addRow(self._create_label("Font Size"), self.size_spin)
         
         self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self.opacity_slider.setRange(30, 100)
-        self.opacity_label = QLabel()
-        self.opacity_slider.valueChanged.connect(lambda value: self.opacity_label.setText(f" {value}%"))
-        
-        opacity_layout = QHBoxLayout()
-        opacity_layout.addWidget(self.opacity_slider)
-        opacity_layout.addWidget(self.opacity_label)
-        
-        self.form_layout.addRow(QLabel("Theme:"), self.theme_combo)
-        self.form_layout.addRow(QLabel("Font Family:"), self.font_combo)
-        self.form_layout.addRow(QLabel("Font Size:"), self.size_spin)
-        self.form_layout.addRow(QLabel("Background Opacity:"), opacity_layout)
-        
-        self.save_btn = QPushButton("Save & Apply Settings")
-        self.save_btn.clicked.connect(self.save_settings)
-        
-        self.update_btn = QPushButton("Check for Updates")
-        self.update_btn.clicked.connect(self.check_for_updates)
-        
-        self.clear_history_btn = QPushButton("Clear Command History")
-        self.clear_history_btn.clicked.connect(self.prompt_clear_history)
-        
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(self.save_btn)
-        btn_layout.addWidget(self.update_btn)
-        btn_layout.addWidget(self.clear_history_btn)
-        self.layout.addLayout(btn_layout)
-        
-        default_font = "Menlo" if sys.platform == "darwin" else "Consolas" if os.name == 'nt' else "Monospace"
-        self.font_combo.setCurrentText(self.settings.value("font_family", default_font))
-        self.size_spin.setValue(int(self.settings.value("font_size", 11)))
-        self.theme_combo.setCurrentText(self.settings.value("theme", "Dracula (Dark)"))
-        
         opacity = int(self.settings.value("opacity", 85))
         self.opacity_slider.setValue(opacity)
-        self.opacity_label.setText(f" {opacity}%")
+        self.opacity_lbl = QLabel(f"{opacity}%")
+        self.opacity_lbl.setStyleSheet("font-weight: bold; min-width: 40px;")
+        self.opacity_slider.valueChanged.connect(lambda v: self.opacity_lbl.setText(f"{v}%"))
         
+        op_box = QHBoxLayout()
+        op_box.addWidget(self.opacity_slider)
+        op_box.addWidget(self.opacity_lbl)
+        app_layout.addRow(self._create_label("Glass Opacity"), op_box)
+        
+        # --- Live Theme Preview ---
+        self.preview_container = QFrame()
+        self.preview_container.setObjectName("ThemePreviewContainer")
+        preview_container_layout = QVBoxLayout(self.preview_container)
+        preview_container_layout.setContentsMargins(0, 10, 0, 0)
+
+        # macOS style dots bar
+        dots_bar = QHBoxLayout()
+        dots_bar.setSpacing(6)
+        dots_bar.setContentsMargins(15, 8, 15, 0)
+        for color in ["#ff5f56", "#ffbd2e", "#27c93f"]:
+            dot = QFrame()
+            dot.setFixedSize(10, 10)
+            dot.setStyleSheet(f"background: {color}; border-radius: 5px;")
+            dots_bar.addWidget(dot)
+        dots_bar.addStretch()
+        preview_container_layout.addLayout(dots_bar)
+
+        self.preview_frame = QFrame()
+        self.preview_frame.setFixedHeight(120)
+        self.preview_frame.setObjectName("ThemePreview")
+        preview_layout = QVBoxLayout(self.preview_frame)
+        preview_layout.setContentsMargins(15, 10, 15, 15)
+        
+        self.preview_text = QLabel("velora@terminal:~$ fetch\nOS: Velora Engine v3.0\nUptime: 2 days, 4 hours")
+        self.preview_text.setStyleSheet(f"font-family: '{self.settings.value('font_family', default_font)}'; font-size: 12px; font-weight: 500;")
+        preview_layout.addWidget(self.preview_text)
+        
+        preview_container_layout.addWidget(self.preview_frame)
+        app_layout.addRow(self._create_label("Interface Preview"), self.preview_container)
+
+        self.theme_combo.currentTextChanged.connect(self.update_preview)
+        
+        app_page_layout.addWidget(self.appearance_card)
+        self.pages.addWidget(self.appearance_page)
+
+        
+        # --- Behavior Page ---
+        self.behavior_page = QWidget()
+        beh_page_layout = QVBoxLayout(self.behavior_page)
+        beh_page_layout.setContentsMargins(40, 20, 40, 40)
+        beh_page_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        self.behavior_card = self._create_card("Terminal Behavior")
+        self.behavior_card.setFixedWidth(680)
+        beh_layout = QFormLayout(self.behavior_card)
+        beh_layout.setContentsMargins(30, 30, 30, 30)
+        beh_layout.setSpacing(20)
+
+        
+        self.shell_combo = QComboBox()
+        self.shell_combo.addItems(["zsh", "bash", "sh", "python3"])
+        self.shell_combo.setCurrentText(self.settings.value("shell", "zsh"))
+        beh_layout.addRow(self._create_label("Default Shell"), self.shell_combo)
+        
+        self.startup_input = QLineEdit()
+        self.startup_input.setPlaceholderText("Script to run on boot...")
+        self.startup_input.setText(self.settings.value("startup_script", ""))
+        beh_layout.addRow(self._create_label("Startup Script"), self.startup_input)
+        
+        self.auto_clear_cb = QCheckBox("Clear screen on startup")
+        self.auto_clear_cb.setChecked(self.settings.value("auto_clear", "false") == "true")
+        self.auto_clear_cb.setStyleSheet(f"color: {self.theme['fg']}; font-size: 13px;")
+        beh_layout.addRow(self.auto_clear_cb)
+        
+        beh_layout.addRow(self._create_label("Maintenance"), QWidget())
+        
+        self.clear_history_btn = QPushButton("Clear Command History")
+        self.clear_history_btn.setObjectName("DangerBtn")
+        self.clear_history_btn.clicked.connect(self.prompt_clear_history)
+        beh_layout.addRow(self.clear_history_btn)
+        
+        self.update_btn = QPushButton("Check for System Updates")
+        self.update_btn.setObjectName("SecondaryBtn")
+        self.update_btn.clicked.connect(self.check_for_updates)
+        beh_layout.addRow(self.update_btn)
+        
+        beh_page_layout.addWidget(self.behavior_card)
+        self.pages.addWidget(self.behavior_page)
+
+        
+        # --- About Page ---
+        self.about_page = QWidget()
+        about_page_layout = QVBoxLayout(self.about_page)
+        about_page_layout.setContentsMargins(40, 20, 40, 40)
+        about_page_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        self.about_card = self._create_card("About Velora")
+        self.about_card.setFixedWidth(680)
+        about_layout = QVBoxLayout(self.about_card)
+        about_layout.setContentsMargins(30, 30, 30, 30)
+        about_layout.setSpacing(12)
+
+        
+        # --- About Page Content ---
+        # Logo & Branding Header
+        logo_container = QWidget()
+        logo_layout = QVBoxLayout(logo_container)
+        logo_layout.setContentsMargins(0, 0, 0, 20)
+        logo_layout.setSpacing(15)
+        logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        logo_lbl = QLabel()
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'velora.png')
+        if os.path.exists(icon_path):
+            pix = QIcon(icon_path).pixmap(96, 96)
+            logo_lbl.setPixmap(pix)
+        else:
+            logo_lbl.setText("⚡")
+            logo_lbl.setStyleSheet("font-size: 64px;")
+        logo_layout.addWidget(logo_lbl)
+
+        name_lbl = QLabel("VELORA TERMINAL")
+        name_lbl.setStyleSheet(f"font-size: 28px; font-weight: 900; color: {self.theme['fg']}; letter-spacing: 2px;")
+        logo_layout.addWidget(name_lbl)
+
+        # Version Badge
+        badge_container = QWidget()
+        badge_layout = QHBoxLayout(badge_container)
+        badge_layout.setContentsMargins(0, 0, 0, 0)
+        
+        ver_badge = QLabel(f"  PRODUCTION v{__version__}  ")
+        ver_badge.setStyleSheet(f"""
+            background-color: rgba({_hex_to_rgb_str(self.theme['sel'])}, 0.2);
+            color: {self.theme['sel']};
+            border: 1px solid rgba({_hex_to_rgb_str(self.theme['sel'])}, 0.4);
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 4px;
+        """)
+        badge_layout.addWidget(ver_badge)
+        logo_layout.addWidget(badge_container)
+        
+        about_layout.addWidget(logo_container)
+
+        # Description Card
+        desc_card = QFrame()
+        desc_card.setStyleSheet(f"background-color: rgba(255, 255, 255, 0.03); border-radius: 16px; padding: 15px;")
+        desc_card_layout = QVBoxLayout(desc_card)
+        
+        desc_lbl = QLabel(__description__)
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.7); font-size: 14px; line-height: 1.6;")
+        desc_card_layout.addWidget(desc_lbl)
+        about_layout.addWidget(desc_card)
+
+        # Links Grid
+        links_container = QWidget()
+        links_layout = QGridLayout(links_container)
+        links_layout.setContentsMargins(0, 10, 0, 0)
+        links_layout.setSpacing(15)
+
+        resources = [
+            ("GitHub Repository", "https://github.com/SouvikNandi1/Velora", "#50fa7b"),
+            ("Official Website", __website__, "#8be9fd"),
+            ("Documentation", "https://velora.dev/docs", "#ff79c6"),
+            ("Support Discord", "https://discord.gg/velora", "#bd93f9")
+        ]
+
+        for i, (name, url, color) in enumerate(resources):
+            btn = QPushButton(name)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(40)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: {color};
+                    border: 1px solid rgba({_hex_to_rgb_str(color)}, 0.3);
+                    border-radius: 10px;
+                    font-weight: 600;
+                    font-size: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba({_hex_to_rgb_str(color)}, 0.1);
+                    border: 1px solid {color};
+                }}
+            """)
+            btn.clicked.connect(lambda checked, u=url: QDesktopServices.openUrl(QUrl(u)))
+            links_layout.addWidget(btn, i // 2, i % 2)
+
+        about_layout.addWidget(links_container)
+
+        about_layout.addStretch()
+        
+        # Footer Credits
+        credits_lbl = QLabel(f"Crafted with ♥ by {__author__} and the Open Source Community")
+        credits_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        credits_lbl.setStyleSheet(f"color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.3); font-size: 11px; margin-top: 20px;")
+        about_layout.addWidget(credits_lbl)
+
+        
+        about_page_layout.addWidget(self.about_card)
+        self.pages.addWidget(self.about_page)
+        
+        self.content_layout.addWidget(self.pages)
+        self.main_layout.addWidget(self.content_stack)
+
+        
+        self.cat_btns["Appearance"].setChecked(True)
+        self.update_preview(self.theme_name)
         self.apply_theme()
+
+
+    def update_preview(self, theme_name):
+        theme = THEMES.get(theme_name, THEMES["Dracula (Dark)"])
+        bg = theme['bg']
+        fg = theme['fg']
+        border = theme['border']
+        
+        self.preview_container.setStyleSheet(f"""
+            #ThemePreviewContainer {{
+                background-color: {bg};
+                border: 1px solid {border};
+                border-radius: 14px;
+            }}
+        """)
+        self.preview_text.setStyleSheet(f"color: {fg}; font-family: '{self.settings.value('font_family', 'Menlo' if sys.platform == 'darwin' else 'Consolas' if os.name == 'nt' else 'DejaVu Sans Mono')}'; font-size: 12px; font-weight: 500;")
+
+
+    def _create_card(self, title):
+
+        card = QFrame()
+        card.setObjectName("SettingsCard")
+        # card.setGraphicsEffect(self._create_shadow()) # Shadow often lags in scroll areas
+        return card
+
+    def _create_label(self, text):
+        lbl = QLabel(text)
+        lbl.setStyleSheet(f"font-weight: 600; color: rgba({_hex_to_rgb_str(self.theme['fg'])}, 0.7);")
+        return lbl
+
+    def switch_category(self, name):
+        for n, btn in self.cat_btns.items():
+            btn.setChecked(n == name)
+            
+        if name == "Appearance": self.pages.setCurrentWidget(self.appearance_page)
+        elif name == "Behavior": self.pages.setCurrentWidget(self.behavior_page)
+        elif name == "About": self.pages.setCurrentWidget(self.about_page)
+
+
 
     def apply_theme(self):
         theme_name = self.settings.value("theme", "Dracula (Dark)")
         theme = THEMES.get(theme_name, THEMES["Dracula (Dark)"])
+        bg_rgb = _hex_to_rgb_str(theme['bg'])
+        fg_rgb = _hex_to_rgb_str(theme['fg'])
+        sel_rgb = _hex_to_rgb_str(theme['sel'])
+        border_rgb = _hex_to_rgb_str(theme['border'])
 
         self.setStyleSheet(f"""
-            SettingsTab {{ background-color: transparent; color: {theme['fg']}; }}
-            QLabel {{
-                color: {theme['fg']};
+            SettingsTab {{ background-color: transparent; }}
+            #SettingsSidebar {{
+                background-color: rgba({bg_rgb}, 0.1);
+                border-right: 1px solid rgba({border_rgb}, 0.15);
+            }}
+            #TipFrame {{
+                background-color: rgba({fg_rgb}, 0.03);
+                border: 1px solid rgba({border_rgb}, 0.1);
+                border-radius: 12px;
+                margin: 5px;
+            }}
+            #SettingsSidebar QPushButton {{
+
+                background-color: transparent;
+                color: rgba({fg_rgb}, 0.6);
+                border: none;
+                border-radius: 8px;
+                text-align: left;
+                padding-left: 15px;
                 font-size: 13px;
                 font-weight: 600;
-                margin-top: 10px;
-                opacity: 0.85;
             }}
-            QComboBox, QSpinBox {{
-                background-color: rgba(0, 0, 0, 0.25);
+            #SettingsSidebar QPushButton:hover {{
+                background-color: rgba({fg_rgb}, 0.05);
                 color: {theme['fg']};
-                border: 1px solid {theme['border']};
-                border-radius: 10px;
-                padding: 9px 14px;
-                font-size: 13px;
-                margin-top: 4px;
-                min-width: 180px;
             }}
-            QComboBox:focus, QSpinBox:focus {{
-                border: 1px solid {theme['fg']};
+            #SettingsSidebar QPushButton:checked {{
+                background-color: rgba({sel_rgb}, 0.2);
+                color: {theme['sel']};
+                font-weight: 800;
+            }}
+            #SettingsHeader {{
+                background-color: rgba({bg_rgb}, 0.1);
+                border-bottom: 1px solid rgba({border_rgb}, 0.1);
+            }}
+            #SettingsCard {{
+                background-color: rgba({bg_rgb}, 0.25);
+                border: 1px solid rgba({border_rgb}, 0.12);
+                border-radius: 24px;
+            }}
+            #SettingsCard:hover {{
+                border: 1px solid rgba({sel_rgb}, 0.3);
+                background-color: rgba({bg_rgb}, 0.3);
+            }}
+            #ThemePreviewContainer {{
+                background-color: {theme['bg']};
+                border: 1px solid {border_rgb};
+                border-radius: 14px;
+            }}
+            #ThemePreview {{
+                background-color: transparent;
+                border: none;
+            }}
+
+
+            QLabel {{ color: {theme['fg']}; }}
+            QComboBox, QSpinBox, QLineEdit {{
+                background-color: rgba(0, 0, 0, 0.2);
+                color: {theme['fg']};
+                border: 1px solid rgba({border_rgb}, 0.4);
+                border-radius: 10px;
+                padding: 10px 15px;
+                font-size: 13px;
+                min-width: 200px;
+            }}
+            QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{
+                border: 1px solid {theme['sel']};
                 background-color: rgba(0, 0, 0, 0.4);
             }}
-            QComboBox::drop-down {{ border: none; width: 24px; }}
-            QComboBox QAbstractItemView {{
-                background-color: {theme['bg']};
+
+            #PrimaryBtn {{
+                background-color: {theme['sel']};
                 color: {theme['fg']};
-                selection-background-color: {theme['sel']};
-                border: 1px solid {theme['border']};
-                border-radius: 8px;
-                padding: 4px;
+                border-radius: 10px;
+                font-weight: 800;
+            }}
+            #PrimaryBtn:hover {{
+                background-color: {theme['fg']};
+                color: {theme['bg']};
+            }}
+            #SecondaryBtn {{
+                background-color: rgba({fg_rgb}, 0.05);
+                color: {theme['fg']};
+                border: 1px solid rgba({border_rgb}, 0.3);
+                border-radius: 10px;
+                padding: 10px;
+                font-weight: 600;
+            }}
+            #SecondaryBtn:hover {{
+                background-color: rgba({fg_rgb}, 0.15);
+            }}
+            #DangerBtn {{
+                background-color: rgba(255, 85, 85, 0.1);
+                color: #ff5555;
+                border: 1px solid rgba(255, 85, 85, 0.2);
+                border-radius: 10px;
+                padding: 10px;
+                font-weight: 600;
+            }}
+            #DangerBtn:hover {{
+                background-color: #ff5555;
+                color: white;
             }}
             QSlider::groove:horizontal {{
                 background: rgba(255,255,255,0.1);
@@ -1386,27 +1964,6 @@ class SettingsTab(QWidget):
                 margin: -6px 0;
                 border-radius: 8px;
             }}
-            QSlider::sub-page:horizontal {{
-                background: {theme['border']};
-                border-radius: 2px;
-            }}
-            QPushButton {{
-                background-color: {theme['sel']};
-                color: {theme['fg']};
-                border: 1px solid {theme['border']};
-                border-radius: 10px;
-                padding: 10px 20px;
-                font-weight: 600;
-                font-size: 13px;
-                margin-top: 20px;
-            }}
-            QPushButton:hover {{
-                background-color: {theme['border']};
-                border: 1px solid {theme['fg']};
-            }}
-            QPushButton:pressed {{
-                background-color: rgba(0,0,0,0.3);
-            }}
         """)
 
     def apply_font(self):
@@ -1417,8 +1974,16 @@ class SettingsTab(QWidget):
         self.settings.setValue("font_size", self.size_spin.value())
         self.settings.setValue("theme", self.theme_combo.currentText())
         self.settings.setValue("opacity", self.opacity_slider.value())
+        
+        # Save Behavior settings
+        self.settings.setValue("shell", self.shell_combo.currentText())
+        self.settings.setValue("startup_script", self.startup_input.text())
+        self.settings.setValue("auto_clear", "true" if self.auto_clear_cb.isChecked() else "false")
+
+        
         self.apply_theme()
         self.settings_applied.emit()
+
 
     def check_for_updates(self):
         self.update_btn.setText("Checking...")
@@ -1555,10 +2120,13 @@ class TerminalSession(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.output_area = TerminalDisplay()
-        self.apply_font()
+        
+        # Determine theme before UI creation to avoid fallback flickering
+        theme_name = self.settings.value("theme", "Dracula (Dark)")
+        self.current_theme = THEMES.get(theme_name, THEMES["Dracula (Dark)"])
         
         # AI Oracle Integration
-        self.ai_bar = AIAssistant(self.current_theme if hasattr(self, 'current_theme') else THEMES["Dracula (Dark)"])
+        self.ai_bar = AIAssistant(self.current_theme)
         self.ai_bar.command_suggested.connect(self.handle_ai_suggestion)
         self.ai_bar.hide()
         self.layout.addWidget(self.ai_bar)
@@ -1569,6 +2137,10 @@ class TerminalSession(QWidget):
         self.output_area.zoom_changed.connect(self.zoom_changed.emit)
         self.output_area.terminal_resized.connect(self.on_terminal_resize)
         self.layout.addWidget(self.output_area)
+        
+        self.apply_font()
+        self.apply_theme()
+
         
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search terminal... (Enter: next, Shift+Enter: previous, Ctrl+F: toggle)")
@@ -1647,7 +2219,7 @@ class TerminalSession(QWidget):
             )
             self.process.start(sys.executable, ["-c", pty_cmd])
             
-        self.apply_theme()
+
         
         ascii_logo = (
             "\x1b[36;1m"
@@ -1672,7 +2244,7 @@ class TerminalSession(QWidget):
         return is_newer(cloud_ver, local_ver)
 
     def on_terminal_resize(self, rows, cols):
-        if self.process.state() == QProcess.ProcessState.Running and os.name != 'nt':
+        if hasattr(self, 'process') and self.process.state() == QProcess.ProcessState.Running and os.name != 'nt':
             resize_seq = f"\x1b]999;{rows};{cols}\x07"
             self.process.write(resize_seq.encode())
 
@@ -1683,30 +2255,20 @@ class TerminalSession(QWidget):
         self.output_area.clear_history()
 
     def apply_font(self):
-        default_font = "Menlo" if sys.platform == "darwin" else "Consolas" if os.name == 'nt' else "Monospace"
-        font_family = self.settings.value("font_family", default_font)
-        font_size = int(self.settings.value("font_size", 11))
-        font = QFont(font_family, font_size)
-        font.setStyleHint(QFont.StyleHint.Monospace)
-        self.output_area.setFont(font)
-        self.output_area.resize_terminal()
+        if hasattr(self.output_area, 'apply_font'):
+            self.output_area.apply_font()
+
 
     def apply_theme(self):
         theme_name = self.settings.value("theme", "Dracula (Dark)")
         theme = THEMES.get(theme_name, THEMES["Dracula (Dark)"])
         self.current_theme = theme
 
-        border_rgba = get_rgba_from_hex(theme['border'], 50)
+        if hasattr(self.output_area, 'apply_theme'):
+            self.output_area.apply_theme()
+
         self.setStyleSheet(f"""
             TerminalSession {{ background-color: transparent; color: {theme['fg']}; }}
-            QPlainTextEdit {{
-                background-color: transparent;
-                color: {theme['fg']};
-                border: none;
-                selection-background-color: {theme['sel']};
-                padding: 10px 14px;
-                line-height: 1.4;
-            }}
             QLineEdit {{
                 background-color: rgba(0, 0, 0, 0.45);
                 color: {theme['fg']};
@@ -1721,23 +2283,8 @@ class TerminalSession(QWidget):
                 border: 1px solid {theme['fg']};
                 background-color: rgba(0, 0, 0, 0.6);
             }}
-            QScrollBar:vertical {{
-                background-color: transparent;
-                width: 8px;
-                margin: 4px 2px;
-            }}
-            QScrollBar::handle:vertical {{
-                background-color: {border_rgba};
-                min-height: 30px;
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:vertical:hover {{
-                background-color: {theme['border']};
-            }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                border: none; background: none; height: 0px;
-            }}
         """)
+
 
     def handle_ai_suggestion(self, command):
         """Insert the AI suggested command into the terminal prompt"""
@@ -2480,13 +3027,20 @@ class AIAssistant(QFrame):
         self.input.setPlaceholderText("Ask the Velora Oracle... (e.g., 'How do I list large files?')")
         self.input.setStyleSheet(f"""
             QLineEdit {{
-                background: transparent;
-                border: none;
+                background: rgba({_hex_to_rgb_str(theme['bg'])}, 0.2);
+                border: 1px solid rgba({_hex_to_rgb_str(theme['border'])}, 0.3);
+                border-radius: 8px;
                 color: {theme['fg']};
-                font-size: 14px;
-                font-style: italic;
+                padding: 6px 12px;
+                font-size: 13px;
+                font-weight: 500;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {theme['sel']};
+                background: rgba({_hex_to_rgb_str(theme['bg'])}, 0.4);
             }}
         """)
+
         self.input.returnPressed.connect(self.process_query)
         layout.addWidget(self.input)
         
@@ -2588,7 +3142,13 @@ class TerminalApp(QMainWindow):
         self.update_btn.clicked.connect(self.show_detailed_updates)
         self.status_bar.addPermanentWidget(self.update_btn)
         
-        self.update_status_bar(int(self.settings.value("font_size", 11)))
+        try:
+            sz = int(self.settings.value("font_size", 11))
+            if sz <= 0: sz = 11
+        except (ValueError, TypeError):
+            sz = 11
+        self.update_status_bar(sz)
+
         
         # Shortcuts
         self.shortcut_new_tab = QShortcut(QKeySequence("Ctrl+T"), self)
@@ -3043,6 +3603,10 @@ class TerminalApp(QMainWindow):
                 background-color: {bg_rgba};
                 border-radius: 12px;
             }}
+            #AIAssistant {{
+                background-color: rgba({_hex_to_rgb_str(theme['bg'])}, 0.3);
+                border-top: 1px solid {border_rgba};
+            }}
             TerminalSplitter {{ background-color: transparent; }}
             QSplitter::handle {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -3057,35 +3621,36 @@ class TerminalApp(QMainWindow):
                 margin-top: -1px;
             }}
             QTabBar {{
-                background: transparent;
+                background: rgba(0, 0, 0, 0.15);
                 qproperty-expanding: false;
                 qproperty-drawBase: 0;
+                border-bottom: 1px solid {border_rgba};
             }}
             QTabBar::tab {{
-                background: rgba(255, 255, 255, 0.03);
+                background: transparent;
                 border: 1px solid transparent;
-                color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.6);
-                padding: 8px 32px 8px 18px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-                margin-top: 6px;
-                margin-right: 2px;
+                color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.5);
+                padding: 10px 32px 10px 20px;
+                margin-top: 4px;
+                margin-right: 1px;
                 font-size: 12px;
                 min-width: 140px;
                 text-align: left;
             }}
             QTabBar::tab:selected {{
-                background: rgba({_hex_to_rgb_str(theme['bg'])}, 0.5);
-                border: 1px solid {border_rgba};
-                border-bottom: none;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 rgba({_hex_to_rgb_str(theme['sel'])}, 0.35), stop:1 transparent);
+                border-top: 2px solid {theme['sel']};
                 color: {theme['fg']};
-                margin-top: 2px;
-                padding-top: 12px;
-                font-weight: 500;
+                font-weight: 800;
+                letter-spacing: 0.5px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
             }}
+
             QTabBar::tab:hover:!selected {{
-                background: rgba(255, 255, 255, 0.08);
-                color: {theme['fg']};
+                background: rgba(255, 255, 255, 0.05);
+                color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.8);
             }}
             QTabBar::close-button {{
                 subcontrol-origin: padding;
@@ -3093,35 +3658,39 @@ class TerminalApp(QMainWindow):
                 image: url("{close_icon_url}");
                 width: 16px;
                 height: 16px;
-                padding: 0px;
+                padding: 2px;
                 margin-right: 12px;
                 border-radius: 4px;
             }}
             QTabBar::close-button:hover {{
-                background-color: rgba(255, 85, 85, 0.3);
+                background-color: rgba(255, 85, 85, 0.2);
             }}
             QToolButton {{
-                background-color: rgba(255, 255, 255, 0.05);
+                background-color: transparent;
                 color: {theme['fg']};
-                border: 1px solid {border_rgba};
+                border: 1px solid transparent;
                 font-weight: bold;
                 font-size: 14px;
-                padding: 6px 14px;
-                margin: 6px 4px;
-                border-radius: 8px;
+                padding: 6px 12px;
+                margin: 6px 2px;
+                border-radius: 6px;
             }}
             QToolButton:hover {{
-                background-color: {sel_rgba};
-                border: 1px solid {theme['border']};
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid {border_rgba};
             }}
             QStatusBar {{
-                background-color: {bg_rgba};
-                color: {theme['border']};
+                background-color: rgba(0, 0, 0, 0.25);
+                color: rgba({_hex_to_rgb_str(theme['fg'])}, 0.4);
                 border-top: 1px solid {border_rgba};
-                padding: 3px 14px;
-                font-size: 12px;
+                padding: 4px 14px;
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
             }}
         """)
+
 
     def open_vpm(self):
         # Jump to the VPM tab if it is already open

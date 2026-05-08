@@ -29,8 +29,10 @@ V_ORANGE = "\x1b[38;2;255;184;108m"
 V_RED    = "\x1b[38;2;255;85;85m"
 V_YELLOW = "\x1b[38;2;241;250;140m"
 V_GREY   = "\x1b[38;2;98;114;164m"
+V_WHITE  = "\x1b[38;2;248;248;242m"
 V_RESET  = "\x1b[0m"
 V_BOLD   = "\x1b[1m"
+V_DIM    = "\x1b[2m"
 
 def v_get_terminal_width():
     try: return shutil.get_terminal_size((80, 20)).columns
@@ -38,22 +40,23 @@ def v_get_terminal_width():
 
 def v_print_header(title, color=V_PURPLE):
     width = min(v_get_terminal_width(), 80)
-    print(f"\n{color}{V_BOLD}┏" + "━" * (width - 2) + "┓")
-    print(f"┃ {title.center(width - 4)} ┃")
-    print(f"┗" + "━" * (width - 2) + f"┛{V_RESET}")
+    # Striking double-line header
+    print(f"\n{color}{V_BOLD}╔" + "═" * (width - 2) + "╗")
+    print(f"║ {title.upper().center(width - 4)} ║")
+    print(f"╚" + "═" * (width - 2) + f"╝{V_RESET}")
 
 def v_print_section(title, color=V_CYAN):
     width = min(v_get_terminal_width(), 80)
-    print(f"\n{color}{V_BOLD}─── {title} " + "─" * (width - len(title) - 5) + f"{V_RESET}")
+    print(f"\n{color}{V_BOLD}── {title} " + "─" * (width - len(title) - 4) + f"{V_RESET}")
 
 def v_print_status(message, type="info"):
-    if type == "success": print(f"  {V_GREEN}✅ {message}{V_RESET}")
-    elif type == "error": print(f"  {V_RED}❌ {V_BOLD}Error:{V_RESET} {V_RED}{message}{V_RESET}")
-    elif type == "warning": print(f"  {V_ORANGE}⚠️  {message}{V_RESET}")
-    else: print(f"  {V_CYAN}ℹ️  {message}{V_RESET}")
+    if type == "success": print(f"  {V_GREEN}✔ {V_BOLD}{message}{V_RESET}")
+    elif type == "error": print(f"  {V_RED}✘ {V_BOLD}Error:{V_RESET} {V_RED}{message}{V_RESET}")
+    elif type == "warning": print(f"  {V_ORANGE}⚠ {V_BOLD}{message}{V_RESET}")
+    else: print(f"  {V_CYAN}ℹ {V_BOLD}{message}{V_RESET}")
 
 def v_print_labeled(label, value, label_color=V_GREY, value_color=V_RESET):
-    print(f"  {label_color}{label:<15}{V_RESET} {value_color}{value}{V_RESET}")
+    print(f"  {label_color}{V_BOLD}{label:<15}{V_RESET} {value_color}{value}{V_RESET}")
 
 class V_Table:
     def __init__(self, headers, colors=None, width=None):
@@ -65,26 +68,40 @@ class V_Table:
     def print(self):
         col_widths = [len(h) for h in self.headers]
         for row in self.rows:
-            for i, val in enumerate(row): col_widths[i] = max(col_widths[i], len(str(val)))
+            for i, val in enumerate(row): 
+                # Stripping ANSI for width calculation
+                clean_val = re.sub(r'\x1b\[[0-9;]*m', '', str(val))
+                col_widths[i] = max(col_widths[i], len(clean_val))
+        
+        # Adjust last column if needed to fill width
         total_fixed = sum(col_widths[:-1]) + (len(self.headers) * 3)
-        col_widths[-1] = max(col_widths[-1], self.width - total_fixed - 2)
+        col_widths[-1] = max(col_widths[-1], self.width - total_fixed - 4)
+        
+        # Header
         header_str = "  "
         for i, h in enumerate(self.headers): header_str += f"{V_BOLD}{V_GREY}{h:<{col_widths[i]}}{V_RESET}   "
         print(header_str)
-        print("  " + V_GREY + "─" * (sum(col_widths) + len(self.headers) * 3) + V_RESET)
+        print("  " + V_DIM + V_GREY + "─" * (sum(col_widths) + (len(self.headers)-1) * 3) + V_RESET)
+        
+        # Rows
         for row in self.rows:
             row_str = "  "
             for i, val in enumerate(row):
                 color = self.colors[i] if i < len(self.colors) else V_RESET
-                row_str += f"{color}{str(val):<{col_widths[i]}}{V_RESET}   "
+                # Handle cases where value already has colors (like icons)
+                val_str = str(val)
+                clean_val = re.sub(r'\x1b\[[0-9;]*m', '', val_str)
+                padding = " " * (col_widths[i] - len(clean_val))
+                row_str += f"{color}{val_str}{V_RESET}{padding}   "
             print(row_str)
         print()
 
 def v_progress_bar(current, total, prefix="", suffix="", length=40):
     percent = float(current) * 100 / total
     filled_length = int(length * current // total)
+    # Modern smooth progress bar using block characters
     bar = "█" * filled_length + "░" * (length - filled_length)
-    sys.stdout.write(f"\r  {prefix} {V_CYAN}[{V_GREEN}{bar}{V_CYAN}] {V_BOLD}{percent:>3.0f}%{V_RESET} {suffix}")
+    sys.stdout.write(f"\r  {V_BOLD}{prefix}{V_RESET} {V_PURPLE}[{V_PINK}{bar}{V_PURPLE}] {V_BOLD}{V_WHITE}{percent:>3.0f}%{V_RESET} {V_DIM}{suffix}{V_RESET}")
     sys.stdout.flush()
     if current == total: print()
 # --- END STABILITY LAYER ---
@@ -252,19 +269,11 @@ def list_packages():
         req = get_request(url)
         with urllib.request.urlopen(req, context=get_context(), timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
-            # Save cache for terminal suggestions
-            try:
-                with open(VPM_CACHE, 'w') as f:
-                    json.dump(data, f)
-            except: pass
-
             if not data or data == 'null':
                 v_print_status("No packages found in the cloud.", type="info")
                 return
             
             categories = {}
-
-            # Mapping for official packages to categories
             OFFICIAL_MAPPING = {
                 "calc": "🛠️ Tools", "unitconv": "🛠️ Tools", "baseconv": "🛠️ Tools", "hash": "🛠️ Tools", 
                 "textstat": "🛠️ Tools", "todo": "🛠️ Tools", "notes": "🛠️ Tools", "passgen": "🛠️ Tools", 
@@ -280,61 +289,68 @@ def list_packages():
                 if not isinstance(info, dict): continue
                 desc = info.get('description', '')
                 is_official = "✅" in desc
-                
-                # Determine category
-                cat = info.get('category') # Try to get from cloud data first
-                if not cat:
-                    cat = OFFICIAL_MAPPING.get(pkg)
-                
+                cat = info.get('category') or OFFICIAL_MAPPING.get(pkg)
                 if not cat:
                     if "game" in desc.lower() or "play" in desc.lower(): cat = "🎮 Games"
                     elif "tool" in desc.lower() or "utility" in desc.lower(): cat = "🛠️ Tools"
-                    elif is_official: cat = "🛠️ Tools" # Fallback for official
+                    elif is_official: cat = "🛠️ Tools"
                     else: cat = "📦 Other"
-                
                 if cat not in categories: categories[cat] = []
                 categories[cat].append((pkg, info))
 
-            # Stats for dashboard
             total_pkgs = len(data)
             official_count = sum(1 for pkg, info in data.items() if isinstance(info, dict) and "✅" in info.get('description', ''))
             community_count = total_pkgs - official_count
             installed_count = sum(1 for pkg in data if pkg in local_pkgs)
 
-            v_print_header("Velora Cloud Registry", color=V_PURPLE)
+            # --- Striking Workstation Banner ---
+            print(f"\n{V_PURPLE}{V_BOLD}    __     _______ _      ____  _____            ")
+            print(f"    \\ \\   / / ____| |    / __ \\|  __ \\     /\\    ")
+            print(f"     \\ \\_/ /|  __| | |   | |  | | |__) |   /  \\   ")
+            print(f"      \\   / | |___| |___| |__| |  _  /   / /\\ \\  ")
+            print(f"       \\_/  |_____|______\\____/|_| \\_\\  /_/  \\_\\ ")
+            print(f"             C L O U D   R E G I S T R Y{V_RESET}")
             
-            # Summary Dashboard
-            print(f"  {V_CYAN}Total:{V_RESET} {total_pkgs:<5} "
-                  f"{V_GREEN}Official:{V_RESET} {official_count:<5} "
-                  f"{V_PINK}Community:{V_RESET} {community_count:<5} "
-                  f"{V_YELLOW}Installed:{V_RESET} {installed_count}")
-            print(f"  {V_GREY}" + "─" * 60 + f"{V_RESET}\n")
+            # --- Workstation Dashboard ---
+            width = min(v_get_terminal_width(), 80)
+            print(f"\n  {V_BOLD}{V_WHITE}SYSTEM STATUS:{V_RESET} {V_GREEN}ONLINE{V_RESET}  {V_DIM}│{V_RESET}  {V_BOLD}{V_WHITE}REGISTRY:{V_RESET} {V_CYAN}CONNECTED{V_RESET}  {V_DIM}│{V_RESET}  {V_BOLD}{V_WHITE}VERSION:{V_RESET} {V_YELLOW}3.0.0{V_RESET}")
+            print(f"  {V_DIM}" + "═" * (width - 4) + f"{V_RESET}")
+            
+            stats_line = (f"  {V_CYAN}{V_BOLD}TOTAL{V_RESET} {total_pkgs:<6} "
+                         f"{V_PURPLE}{V_BOLD}OFFICIAL{V_RESET} {official_count:<6} "
+                         f"{V_PINK}{V_BOLD}COMMUNITY{V_RESET} {community_count:<6} "
+                         f"{V_YELLOW}{V_BOLD}LOCAL{V_RESET} {installed_count}")
+            print(stats_line)
+            print(f"  {V_DIM}" + "═" * (width - 4) + f"{V_RESET}\n")
 
-            for cat_name, items in categories.items():
-                if not items: continue
+            # --- Categorized Listings ---
+            cat_colors = [V_CYAN, V_PURPLE, V_PINK, V_ORANGE, V_GREEN, V_YELLOW]
+            for i, (cat_name, items) in enumerate(sorted(categories.items())):
+                color = cat_colors[i % len(cat_colors)]
+                v_print_section(cat_name, color=color)
                 
-                v_print_section(cat_name, color=V_CYAN)
                 table = V_Table(["Package", "Version", "Author", "Description"], 
-                                             colors=[V_CYAN, V_YELLOW, V_PINK, V_RESET])
+                               colors=[V_WHITE, V_YELLOW, color, V_GREY])
 
                 items.sort()
                 for pkg, info in items:
                     version = info.get('version', 'v1.0.0')
                     author = info.get('author', 'Unknown')[:12]
                     desc = info.get('description', '').replace('✅', '').strip()
-                    desc = (desc[:29] + '..') if len(desc) > 29 else desc
-                    is_installed = "*" if pkg in local_pkgs else " "
-                    icon = "✅ " if "✅" in info.get('description', '') else ""
+                    desc = (desc[:35] + '..') if len(desc) > 35 else desc
                     
-                    table.add_row([f"{icon}{is_installed}{pkg}", version, author, desc])
+                    is_installed = f"{V_GREEN}●{V_RESET} " if pkg in local_pkgs else f"{V_DIM}○{V_RESET} "
+                    icon = f"{V_PURPLE}🛡️ {V_RESET}" if "✅" in info.get('description', '') else f"{V_DIM}📦 {V_RESET}"
+                    
+                    table.add_row([f"{icon}{is_installed}{V_BOLD}{pkg}", version, author, desc])
                 
                 table.print()
-                print()
 
-            print(f"  {V_GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{V_RESET}")
-            print(f"  {V_GREY}Total: {len(data)} packages  │  * = Installed  │  Use 'vpm info <pkg>'{V_RESET}")
+            print(f"  {V_DIM}{V_GREY}Workstation Legend:{V_RESET}")
+            print(f"  {V_PURPLE}🛡️{V_GREY} Verified Core  {V_WHITE}📦{V_GREY} User Module  {V_GREEN}●{V_GREY} Active  {V_DIM}○{V_DIM} Cloud Only{V_RESET}")
+            print(f"  {V_DIM}{V_GREY}Type 'vpm install <name>' to fetch any module from the registry.{V_RESET}\n")
     except Exception as e:
-        v_print_status(f"Error fetching packages: {e}", type="error")
+        v_print_status(f"Registry synchronization failed: {e}", type="error")
 
 def get_cloud_packages():
     """Returns a dictionary of packages from SNCloud for UI consumption."""
@@ -378,8 +394,6 @@ def get_local_packages_info():
     return pkgs_info
 
 def list_local_packages():
-    v_print_header("Local Installed Packages", color=V_CYAN)
-    
     pkgs = get_local_packages_info()
     
     # Categorize local packages
@@ -391,7 +405,7 @@ def list_local_packages():
     
     # Add Terminal app to System category
     if "🖥️ System" not in categories: categories["🖥️ System"] = []
-    term_ver = os.environ.get("VELORA_VERSION", "2.1.7")
+    term_ver = os.environ.get("VELORA_VERSION", "3.1.0")
     categories["🖥️ System"].append({
         "name": "Velora Terminal",
         "version": term_ver,
@@ -399,18 +413,33 @@ def list_local_packages():
         "description": "Velora Terminal Core Application"
     })
 
+    # --- Local Library Banner ---
+    print(f"\n{V_CYAN}{V_BOLD}    _      ____   _____          _      ")
+    print(f"   | |    / __ \\ / ____|   /\\   | |     ")
+    print(f"   | |   | |  | | |       /  \\  | |     ")
+    print(f"   | |   | |  | | |      / /\\ \\ | |     ")
+    print(f"   | |___| |__| | |____ / ____ \\| |____ ")
+    print(f"   |______\\____/ \\_____/_/    \\_\\______|")
+    print(f"          L O C A L   L I B R A R Y{V_RESET}")
+
+    # --- Library Dashboard ---
+    width = min(v_get_terminal_width(), 80)
+    print(f"\n  {V_BOLD}{V_WHITE}ENVIRONMENT:{V_RESET} {V_GREEN}STABLE{V_RESET}  {V_DIM}│{V_RESET}  {V_BOLD}{V_WHITE}MODULES:{V_RESET} {V_CYAN}{len(pkgs)+1}{V_RESET}  {V_DIM}│{V_RESET}  {V_BOLD}{V_WHITE}STORAGE:{V_RESET} {V_YELLOW}LOCAL{V_RESET}")
+    print(f"  {V_DIM}" + "═" * (width - 4) + f"{V_RESET}\n")
+
     for cat_name, items in sorted(categories.items()):
         v_print_section(cat_name, color=V_PURPLE)
         table = V_Table(["Package", "Version", "Author", "Description"], 
-                                     colors=[V_GREEN, V_YELLOW, V_PINK, V_RESET])
+                                     colors=[V_GREEN, V_YELLOW, V_PINK, V_GREY])
         
         for pkg in sorted(items, key=lambda x: x['name']):
-            table.add_row([pkg['name'], pkg['version'], pkg['author'], pkg['description']])
+            name_display = f"{V_BOLD}{pkg['name']}"
+            table.add_row([name_display, pkg['version'], pkg['author'], pkg['description']])
         
         table.print()
-        print()
     
-    v_print_status(f"Found {len(pkgs) + 1} installed components.", type="info")
+    v_print_status(f"Workspace integrity verified. {len(pkgs) + 1} components active.", type="success")
+
 
 def install_package(pkg_name):
     url = f"{get_base_url()}/{urllib.parse.quote(pkg_name)}.json?_t={int(time.time())}"
@@ -574,21 +603,25 @@ def locate_package(pkg_name):
     target_path_user = os.path.join(USER_CORE_DIR, f"{pkg_name}.py")
     target_path_bundled = os.path.join(BUNDLED_CORE_DIR, f"{pkg_name}.py")
     path_to_reveal = None
+    
+    v_print_header(f"Package Discovery: {pkg_name}", color=V_CYAN)
+    
     if os.path.exists(target_path_user):
         path_to_reveal = target_path_user
-        v_print_status(f"Package '{pkg_name}' is located at:", type="info")
-        print(f"  {V_GREEN}{target_path_user}{V_RESET} (User Update)")
+        v_print_status(f"Found active user-space installation.", type="success")
+        v_print_labeled("Primary Path", target_path_user, value_color=V_GREEN)
         lib_target = os.path.join(USER_CORE_DIR, f"{pkg_name}_lib")
         if os.path.exists(lib_target):
-            print(f"  {V_GREEN}{lib_target}{V_RESET} (Library Directory)")
+            v_print_labeled("Library Dir", lib_target, value_color=V_GREEN)
     elif os.path.exists(target_path_bundled):
         path_to_reveal = target_path_bundled
-        v_print_status(f"Package '{pkg_name}' is located at:", type="info")
-        print(f"  {V_GREEN}{target_path_bundled}{V_RESET} (Bundled natively inside Velora)")
+        v_print_status(f"Found natively bundled core module.", type="info")
+        v_print_labeled("System Path", target_path_bundled, value_color=V_CYAN)
     else:
-        v_print_status(f"Package '{pkg_name}' is not installed locally.", type="error")
+        v_print_status(f"Package '{pkg_name}' is not registered in this environment.", type="error")
         return
 
+    print(f"\n  {V_DIM}{V_GREY}Opening file explorer...{V_RESET}")
     if path_to_reveal:
         try:
             if sys.platform == 'darwin':
@@ -598,6 +631,7 @@ def locate_package(pkg_name):
             else:
                 subprocess.call(['xdg-open', os.path.dirname(path_to_reveal)])
         except: pass
+
 
 def update_all():
     v_print_status("Checking for updates for all installed packages...", type="info")
@@ -687,16 +721,26 @@ def upgrade_terminal():
         v_print_status(f"Upgrade failed: {e}", type="error")
 
 def check_updates():
-    v_print_status("Checking for updates on SNCloud...", type="info")
+    v_print_status("Synchronizing with SNCloud Registry...", type="info")
     app_update = None
-    app_current = "1.0.0"
+    app_current = "3.1.0"
     pkg_updates = []
     bootstrap_update = None
     bootstrap_current = "1.0.0"
     
     try:
+        # --- Update Center Banner ---
+        print(f"\n{V_ORANGE}{V_BOLD}    _    _ _____  _____         _______ ______ ")
+        print(f"   | |  | |  __ \\|  __ \\     /\\|__   __|  ____|")
+        print(f"   | |  | | |__) | |  | |   /  \\  | |  | |__   ")
+        print(f"   | |  | |  ___/| |  | |  / /\\ \\ | |  |  __|  ")
+        print(f"   | |__| | |    | |__| | / ____ \\| |  | |____ ")
+        print(f"    \\____/|_|    |_____/_/    \\_\\_|  |______|")
+        print(f"           U P D A T E   C E N T E R{V_RESET}")
+
         # Check bootstrap update
         try:
+
             req = urllib.request.Request("https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py", headers={'User-Agent': 'Velora-VPM'})
             with urllib.request.urlopen(req, context=get_context(), timeout=5) as response:
                 content = response.read().decode('utf-8')
@@ -739,7 +783,7 @@ def check_updates():
                             if m: local_ver = m.group(1)
                     except: pass
                 else:
-                    local_ver = os.environ.get("VELORA_VERSION", "1.0.0")
+                    local_ver = os.environ.get("VELORA_VERSION", "3.1.0")
 
                 app_current = local_ver
                 if is_newer(cloud_ver, local_ver): app_update = cloud_ver
@@ -762,40 +806,50 @@ def check_updates():
                                 if is_newer(cloud_ver, local_ver): pkg_updates.append((pkg, local_ver, cloud_ver))
                             except Exception: pass
                             
-        v_print_header("Velora Update Center", color=V_PURPLE)
+        v_print_header("Velora Intelligence Hub", color=V_PURPLE)
         
         # Terminal Status
-        v_print_section("Terminal Application", color=V_CYAN)
+        v_print_section("Terminal Core System", color=V_CYAN)
         if app_update:
-            v_print_status(f"Outdated: {V_RED}{app_current}{V_RESET} -> {V_GREEN}{app_update}{V_RESET}", type="warning")
-            print(f"  {V_YELLOW}🔔 Run 'vpm upgrade' to install the new version.{V_RESET}")
+            v_print_status(f"Security/Feature update available!", type="warning")
+            v_print_labeled("Current", app_current, label_color=V_GREY, value_color=V_RED)
+            v_print_labeled("Latest", app_update, label_color=V_GREY, value_color=V_GREEN)
+            print(f"  {V_YELLOW}🔔 Action: Run 'vpm upgrade' to modernize your core.{V_RESET}")
         else:
-            v_print_status(f"Up to date (v{app_current})", type="success")
+            v_print_status(f"Your Terminal is running the latest intelligence (v{app_current})", type="success")
 
         # Bootstrap Status
-        v_print_section("Bootstrap Installer", color=V_CYAN)
+        v_print_section("Bootstrap Engine", color=V_CYAN)
         if bootstrap_update:
-            v_print_status(f"Outdated: {V_RED}{bootstrap_current}{V_RESET} -> {V_GREEN}{bootstrap_update}{V_RESET}", type="warning")
-            print(f"  {V_YELLOW}🔔 Re-run the bootstrap installer to update:{V_RESET}")
+            v_print_status(f"Installer update discovered.", type="warning")
+            v_print_labeled("Current", bootstrap_current, label_color=V_GREY, value_color=V_RED)
+            v_print_labeled("Latest", bootstrap_update, label_color=V_GREY, value_color=V_GREEN)
+            print(f"  {V_YELLOW}🔔 Action: Re-run the bootstrap installer for optimal stability:{V_RESET}")
             if platform.system() == "Windows":
-                cmd = 'powershell.exe -Command "cd $env:USERPROFILE; Invoke-WebRequest -Uri https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py -OutFile bootstrap.py; python bootstrap.py"'
+                cmd = 'powershell.exe -Command "cd $env:USERPROFILE; iwr -useb https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | py"'
             else:
                 cmd = "curl -sSL https://raw.githubusercontent.com/SouvikNandi1/Velora/main/bootstrap.py | python3"
             print(f"  {V_CYAN}{V_BOLD}{cmd}{V_RESET}")
         else:
-            v_print_status(f"Up to date (v{bootstrap_current})", type="success")
+            v_print_status(f"Bootstrap environment is fully optimized (v{bootstrap_current})", type="success")
 
         # Package Status
+        v_print_section("Module Registry", color=V_CYAN)
         if pkg_updates:
-            print(f"\n  {V_BOLD}{V_CYAN}Upgradable Packages:{V_RESET}")
+            v_print_status(f"Detected {len(pkg_updates)} module(s) with pending improvements.", type="warning")
+            table = V_Table(["Module", "Current", "New Version"], colors=[V_PINK, V_RED, V_GREEN])
             for p, l_ver, c_ver in pkg_updates: 
-                print(f"  {V_PINK}• {p:<15}{V_RESET} {V_RED}{l_ver}{V_RESET} -> {V_GREEN}{c_ver}{V_RESET}")
-            print(f"\n  {V_YELLOW}🔔 Run 'vpm update-all' to update {len(pkg_updates)} package(s).{V_RESET}")
+                table.add_row([p, f"v{l_ver}", f"v{c_ver}"])
+            table.print()
+            print(f"  {V_YELLOW}🔔 Action: Run 'vpm update-all' to sync your library.{V_RESET}")
         else:
-            v_print_status("All local packages are up to date!", type="success")
+            v_print_status("All local intelligence modules are fully synchronized.", type="success")
+            
+        print(f"\n  {V_DIM}{V_GREY}Checked {int(time.time())}{V_RESET}")
             
     except Exception as e:
-        v_print_status(f"Error checking updates: {e}", type="error")
+        v_print_status(f"Update check failed: {e}", type="error")
+
 
 def publish_package(pkg_name, file_path, description="", entry_file=""):
     if not os.path.exists(file_path):

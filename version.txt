@@ -887,3 +887,10 @@ v3.5.0
 - DISCOVERY: Enhanced Hub signals with web-authentication badges [OTP] for terminal scanning.
 - OPTIMIZATION: Full responsive support for Desktop Workstations and Mobile Tor Browsers.
 - SECURITY: Hardened the E2EE terminal handshake to support per-peer web access codes.
+
+v3.6.0
+- SETTINGS: Major architectural refactor from a single-page scroll to a professional multi-page tabbed interface.
+- DESIGN: High-fidelity visual overhaul with macOS-inspired window previews and centered glassmorphism layouts.
+- WINDOWS: Resolved critical input visibility and numeric selection bugs in the Velora Messenger.
+- STABILITY: Fixed QFont point-size warnings and improved printable character forwarding in the terminal core.
+- CLEANUP: Removed legacy cloud/network API settings to streamline the user configuration experience.
